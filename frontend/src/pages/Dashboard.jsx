@@ -130,16 +130,6 @@ export default function Dashboard() {
                 <ChatCircle size={20} weight="fill" />
                 Ask Questions
               </button>
-              {document.risk_score > 70 && (
-                <button
-                  data-testid="book-consultation-button"
-                  onClick={() => setShowConsultation(true)}
-                  className="flex items-center gap-2 bg-[#DC2626] text-white font-semibold px-6 py-3 rounded-lg hover:bg-red-700 focus:ring-4 focus:ring-red-300 focus:outline-none transition-all duration-200 transform hover:scale-105"
-                >
-                  <Calendar size={20} weight="fill" />
-                  Book Lawyer Consultation
-                </button>
-              )}
             </div>
           </div>
 
@@ -151,7 +141,19 @@ export default function Dashboard() {
               <div className="text-7xl font-bold text-[#2563EB] mb-2">
                 {document.risk_score}
               </div>
-              <p className="text-sm text-gray-500">out of 100</p>
+              <p className="text-sm text-gray-500 mb-6">out of 100</p>
+              
+              {/* Show lawyer button when risk > 10 or always if undefined */}
+              {(document.risk_score > 10 || !document.risk_score) && (
+                <button
+                  data-testid="consult-lawyer-button"
+                  onClick={() => setShowConsultation(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-[#DC2626] text-white font-semibold px-6 py-3 rounded-lg hover:bg-red-700 focus:ring-4 focus:ring-red-300 focus:outline-none transition-all duration-200 transform hover:scale-105 shadow-lg"
+                >
+                  <Calendar size={20} weight="fill" />
+                  Consult a Lawyer
+                </button>
+              )}
             </div>
 
             <div className="lg:col-span-2 bg-white rounded-2xl shadow-lg p-6 md:p-8 transform transition-all duration-300 hover:shadow-xl">
@@ -207,28 +209,54 @@ export default function Dashboard() {
           </div>
 
           <div className="bg-white rounded-2xl shadow-lg p-6 md:p-8 transform transition-all duration-300 hover:shadow-xl">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">
-              Clause Relationships
-            </h3>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">
+                Key Risk Relationships
+              </h3>
+              
+              {/* Legend */}
+              <div className="flex gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-[#DC2626] rounded-full"></div>
+                  <span className="text-gray-700 font-medium">High Risk</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-[#F59E0B] rounded-full"></div>
+                  <span className="text-gray-700 font-medium">Medium Risk</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-[#16A34A] rounded-full"></div>
+                  <span className="text-gray-700 font-medium">Low Risk</span>
+                </div>
+              </div>
+            </div>
+            
             <div className="bg-gray-50 rounded-xl p-4" style={{ height: '500px' }}>
               {graphData && graphData.nodes && graphData.nodes.length > 0 ? (
                 <ForceGraph2D
                   graphData={graphData}
-                  nodeLabel="name"
+                  nodeLabel={(node) => `
+                    <div style="background: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 300px;">
+                      <div style="font-weight: bold; color: #1F2937; margin-bottom: 8px;">${node.name}</div>
+                      <div style="font-size: 12px; color: #4B5563; margin-bottom: 6px;">Risk Score: ${node.score}/100</div>
+                      <div style="font-size: 12px; color: #6B7280; line-height: 1.4;">${node.explanation || 'No details available'}</div>
+                    </div>
+                  `}
                   nodeColor="color"
-                  nodeRelSize={10}
+                  nodeRelSize={8}
                   linkColor={() => '#D1D5DB'}
-                  linkWidth={2}
+                  linkWidth={1.5}
                   backgroundColor="#F9FAFB"
+                  d3VelocityDecay={0.3}
                   nodeCanvasObjectMode={() => 'after'}
                   nodeCanvasObject={(node, ctx, globalScale) => {
                     const label = node.name;
-                    const fontSize = 12 / globalScale;
+                    const fontSize = 11 / globalScale;
                     ctx.font = `600 ${fontSize}px Inter`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillStyle = '#1F2937';
-                    ctx.fillText(label, node.x, node.y + 20);
+                    ctx.fillText(label, node.x, node.y + 22);
                   }}
                 />
               ) : (
@@ -237,6 +265,10 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+            
+            <p className="text-sm text-gray-500 mt-4 text-center">
+              Showing top {graphData?.nodes?.length || 0} highest-risk clauses and their relationships
+            </p>
           </div>
         </div>
       </div>

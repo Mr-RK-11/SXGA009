@@ -223,34 +223,38 @@ def generate_graph_data(clauses: List[Dict]) -> Dict:
     nodes = []
     edges = []
     
+    # Sort by risk score and take top 6-8 highest risk clauses
+    sorted_clauses = sorted(clauses, key=lambda x: x.get('score', 0), reverse=True)
+    top_clauses = sorted_clauses[:8]  # Max 8 nodes
+    
     clause_keywords = ['payment', 'liability', 'termination', 'penalty']
     
-    # Limit to max 12 nodes for cleaner visualization
-    limited_clauses = clauses[:12]
-    
-    for i, clause in enumerate(limited_clauses):
+    for i, clause in enumerate(top_clauses):
         severity = clause.get('severity', 'low')
         color_map = {'high': '#DC2626', 'medium': '#F59E0B', 'low': '#16A34A'}
+        
+        # Create short, meaningful label (max 3-4 words)
+        clause_type = clause.get('type', 'clause').title()
+        short_label = f"{clause_type} Clause"
+        
         nodes.append({
             'id': i,
-            'name': f"{clause.get('type', 'clause').title()} {i+1}",
-            'val': 10,
+            'name': short_label,
+            'fullText': clause.get('text', ''),
+            'explanation': clause.get('explanation', ''),
+            'score': clause.get('score', 0),
+            'severity': severity,
+            'val': 15 if severity == 'high' else 12 if severity == 'medium' else 10,
             'color': color_map.get(severity, '#16A34A')
         })
     
-    # Create edges only for related clauses
-    for i, clause_i in enumerate(limited_clauses):
-        for j, clause_j in enumerate(limited_clauses):
+    # Create edges only for clearly related clauses (avoid clutter)
+    for i, clause_i in enumerate(top_clauses):
+        for j, clause_j in enumerate(top_clauses):
             if i < j:
-                # Same type = strong relationship
+                # Only connect if same type (clear relationship)
                 if clause_i.get('type') == clause_j.get('type'):
                     edges.append({'source': i, 'target': j})
-                else:
-                    # Shared keywords = weak relationship
-                    text_i = clause_i.get('text', '').lower()
-                    text_j = clause_j.get('text', '').lower()
-                    if any(kw in text_i and kw in text_j for kw in clause_keywords):
-                        edges.append({'source': i, 'target': j})
     
     return {'nodes': nodes, 'links': edges}
 
@@ -379,6 +383,11 @@ Legal Sage Team"""
     send_email(request.user_email, "Appointment Confirmation", user_email_body)
     
     return {"success": True, "lawyer": lawyer}
+
+# Alias endpoint for simpler URL
+@api_router.post("/book-lawyer")
+async def book_lawyer_alias(request: ConsultationRequest):
+    return await book_consultation(request)
 
 @api_router.post("/chat")
 async def chat(request: ChatRequest):
