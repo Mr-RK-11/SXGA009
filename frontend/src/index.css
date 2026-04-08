@@ -4,6 +4,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide Emergent badge and any elements outside #root */
+body > *:not(#root) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+
 @layer base {
   * {
     @apply border-gray-200;

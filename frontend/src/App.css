@@ -3,11 +3,26 @@
   background-color: #F8FAFC;
 }
 
-/* Hide Emergent badge - more specific selectors */
-a[href*="emergent.sh"] {
+/* Hide Emergent badge completely - aggressive CSS */
+a[href*="emergent"],
+a[href*="Emergent"],
+button[style*="position: fixed"],
+div[style*="position: fixed"][style*="bottom"],
+[style*="z-index: 999999"],
+[style*="z-index: 9999"] {
   display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
-button[style*="position: fixed"][style*="bottom"][style*="right"] {
+/* Additional selectors for bottom-right positioned elements */
+body > div[style*="position"][style*="bottom"][style*="right"],
+body > a[style*="position"][style*="bottom"][style*="right"],
+#root ~ div,
+#root ~ a,
+#root ~ button {
   display: none !important;
 }
