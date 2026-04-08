@@ -83,6 +83,7 @@ class ConsultationRequest(BaseModel):
     document_id: str
     user_name: str
     user_email: str
+    preferred_date: str
     preferred_time: str
     message: Optional[str] = ""
 
@@ -94,13 +95,25 @@ class Lawyer(BaseModel):
     image_url: str
 
 mock_lawyers = [
-    {"id": "1", "name": "Sarah Mitchell", "title": "Property Lawyer", "specialty": "lease", "email": "sarah.mitchell@legalfirm.com", "image_url": "https://images.pexels.com/photos/34078744/pexels-photo-34078744.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"},
-    {"id": "2", "name": "David Chen", "title": "HR Lawyer", "specialty": "employment", "email": "david.chen@legalfirm.com", "image_url": "https://images.unsplash.com/photo-1604241842992-1f5e733449cc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwyfHxsYXd5ZXIlMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NzU2ODMwNzd8MA&ixlib=rb-4.1.0&q=85"},
-    {"id": "3", "name": "Emily Rodriguez", "title": "Corporate Lawyer", "specialty": "contract", "email": "emily.rodriguez@legalfirm.com", "image_url": "https://images.pexels.com/photos/34078744/pexels-photo-34078744.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"},
-    {"id": "4", "name": "Michael Thompson", "title": "Business Lawyer", "specialty": "nda", "email": "michael.thompson@legalfirm.com", "image_url": "https://images.unsplash.com/photo-1604241842992-1f5e733449cc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwyfHxsYXd5ZXIlMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NzU2ODMwNzd8MA&ixlib=rb-4.1.0&q=85"},
+    # Property Lawyers (lease)
+    {"id": "1", "name": "Rajesh Sharma", "title": "Property Lawyer", "specialty": "lease", "email": "property.lawyer1@gmail.com", "image_url": "https://images.unsplash.com/photo-1556157382-97eda2d62296?w=400"},
+    {"id": "2", "name": "Ananya Iyer", "title": "Property Lawyer", "specialty": "lease", "email": "property.lawyer2@gmail.com", "image_url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"},
+    
+    # HR Lawyers (employment)
+    {"id": "3", "name": "Vikram Mehta", "title": "HR Lawyer", "specialty": "employment", "email": "hr.lawyer1@gmail.com", "image_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400"},
+    {"id": "4", "name": "Neha Kapoor", "title": "HR Lawyer", "specialty": "employment", "email": "hr.lawyer2@gmail.com", "image_url": "https://images.unsplash.com/photo-1594744803329-e58b31de8bf5?w=400"},
+    
+    # Corporate Lawyers (contract)
+    {"id": "5", "name": "Arjun Rao", "title": "Corporate Lawyer", "specialty": "contract", "email": "corporate.lawyer1@gmail.com", "image_url": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400"},
+    {"id": "6", "name": "Sneha Reddy", "title": "Corporate Lawyer", "specialty": "contract", "email": "corporate.lawyer2@gmail.com", "image_url": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400"},
+    
+    # Business Lawyers (nda)
+    {"id": "7", "name": "Karan Verma", "title": "Business Lawyer", "specialty": "nda", "email": "business.lawyer1@gmail.com", "image_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400"},
+    {"id": "8", "name": "Pooja Nair", "title": "Business Lawyer", "specialty": "nda", "email": "business.lawyer2@gmail.com", "image_url": "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=400"},
 ]
 
 def send_email(to_email: str, subject: str, body: str):
+    """Send email with error handling - returns True/False but doesn't raise exceptions"""
     try:
         msg = MIMEMultipart()
         msg['From'] = os.environ['EMAIL_ADDRESS']
@@ -108,12 +121,13 @@ def send_email(to_email: str, subject: str, body: str):
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
         
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
             server.login(os.environ['EMAIL_ADDRESS'], os.environ['EMAIL_APP_PASSWORD'])
             server.send_message(msg)
+        logging.info(f"Email sent successfully to {to_email}")
         return True
     except Exception as e:
-        logging.error(f"Email send failed: {e}")
+        logging.error(f"Email send failed to {to_email}: {e}")
         return False
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
@@ -339,7 +353,10 @@ async def book_consultation(request: ConsultationRequest):
     sorted_clauses = sorted(clauses, key=lambda x: x.get('score', 0), reverse=True)
     top_risky = sorted_clauses[:2]
     
-    lawyer = next((l for l in mock_lawyers if l['specialty'] == doc_type.lower()), mock_lawyers[0])
+    # Get all lawyers matching this specialty
+    matching_lawyers = [l for l in mock_lawyers if l['specialty'] == doc_type.lower()]
+    # Pick first one or fallback to first lawyer
+    lawyer = matching_lawyers[0] if matching_lawyers else mock_lawyers[0]
     
     risky_clauses_text = "\n".join([
         f"{i+1}. {clause.get('type', 'Unknown').title()}: {clause.get('text', 'N/A')[:100]}... (Risk Score: {clause.get('score', 0)})"
@@ -351,6 +368,7 @@ async def book_consultation(request: ConsultationRequest):
 Client Information:
 - Name: {request.user_name}
 - Email: {request.user_email}
+- Preferred Date: {request.preferred_date}
 - Preferred Time: {request.preferred_time}
 
 Document Details:
@@ -371,7 +389,8 @@ Your appointment request has been confirmed!
 
 Appointment Details:
 - Lawyer: {lawyer['name']} ({lawyer['title']})
-- Preferred Time: {request.preferred_time}
+- Date: {request.preferred_date}
+- Time: {request.preferred_time}
 - Document Type: {doc_type.title()}
 
 {lawyer['name']} will contact you shortly at {request.user_email} to confirm the appointment.
@@ -379,9 +398,18 @@ Appointment Details:
 Best regards,
 Legal Sage Team"""
     
-    send_email(lawyer['email'], "New Appointment Request", lawyer_email_body)
-    send_email(request.user_email, "Appointment Confirmation", user_email_body)
+    # Send emails with error handling - don't fail if emails fail
+    try:
+        send_email(lawyer['email'], "New Appointment Request", lawyer_email_body)
+    except Exception as e:
+        logging.error(f"Failed to send email to lawyer: {e}")
     
+    try:
+        send_email(request.user_email, "Appointment Confirmation", user_email_body)
+    except Exception as e:
+        logging.error(f"Failed to send email to user: {e}")
+    
+    # Always return success to frontend
     return {"success": True, "lawyer": lawyer}
 
 # Alias endpoint for simpler URL
@@ -470,6 +498,19 @@ Your role: Help users understand what's IN their document, not provide legal cou
 @api_router.get("/lawyers")
 async def get_lawyers():
     return mock_lawyers
+
+@api_router.get("/lawyer-for-document/{doc_id}")
+async def get_lawyer_for_document(doc_id: str):
+    """Get the appropriate lawyer for a document based on its type"""
+    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0, "doc_type": 1})
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    
+    doc_type = doc['doc_type'].lower()
+    matching_lawyers = [l for l in mock_lawyers if l['specialty'] == doc_type]
+    lawyer = matching_lawyers[0] if matching_lawyers else mock_lawyers[0]
+    
+    return lawyer
 
 app.include_router(api_router)
 

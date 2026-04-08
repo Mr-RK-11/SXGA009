@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [graphData, setGraphData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showConsultation, setShowConsultation] = useState(false);
+  const [assignedLawyer, setAssignedLawyer] = useState(null);
 
   useEffect(() => {
     const user = localStorage.getItem('user');
@@ -27,12 +28,14 @@ export default function Dashboard() {
 
   const fetchDocument = async () => {
     try {
-      const [docRes, graphRes] = await Promise.all([
+      const [docRes, graphRes, lawyerRes] = await Promise.all([
         axios.get(`${API}/document/${docId}`),
-        axios.get(`${API}/graph/${docId}`)
+        axios.get(`${API}/graph/${docId}`),
+        axios.get(`${API}/lawyer-for-document/${docId}`)
       ]);
       setDocument(docRes.data);
       setGraphData(graphRes.data);
+      setAssignedLawyer(lawyerRes.data);
     } catch (error) {
       console.error('Fetch error:', error);
       alert('Failed to load document');
@@ -273,9 +276,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {showConsultation && (
+      {showConsultation && assignedLawyer && (
         <ConsultationModal
           documentId={docId}
+          lawyer={assignedLawyer}
           onClose={() => setShowConsultation(false)}
         />
       )}
