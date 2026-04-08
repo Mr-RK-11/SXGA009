@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,67 +6,423 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone
-
+import fitz
+from groq import Groq
+import json
+import re
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import io
+import base64
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
-app = FastAPI()
+groq_client = Groq(api_key=os.environ['GROQ_API_KEY'])
 
-# Create a router with the /api prefix
+app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
-
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
+class User(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    name: str
+    email: str
+    user_level: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+class SignInRequest(BaseModel):
+    name: str
+    email: str
 
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
+class SurveyRequest(BaseModel):
+    user_id: str
+    user_level: str
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
+class Clause(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    text: str
+    type: str
+    severity: str
+    score: int
+    explanation: str
+
+class Document(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    filename: str
+    doc_type: str
+    simplified_text: str
+    clauses: List[Dict[str, Any]]
+    risk_score: int
+    pdf_base64: str
+    highlighted_pdf_base64: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    document_id: str
+    role: str
+    content: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ChatRequest(BaseModel):
+    document_id: str
+    message: str
+
+class ConsultationRequest(BaseModel):
+    document_id: str
+    user_name: str
+    user_email: str
+    preferred_time: str
+
+class Lawyer(BaseModel):
+    id: str
+    name: str
+    specialty: str
+    email: str
+    image_url: str
+
+mock_lawyers = [
+    {"id": "1", "name": "Sarah Mitchell", "specialty": "lease", "email": "sarah.mitchell@legalfirm.com", "image_url": "https://images.pexels.com/photos/34078744/pexels-photo-34078744.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"},
+    {"id": "2", "name": "David Chen", "specialty": "employment", "email": "david.chen@legalfirm.com", "image_url": "https://images.unsplash.com/photo-1604241842992-1f5e733449cc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwyfHxsYXd5ZXIlMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NzU2ODMwNzd8MA&ixlib=rb-4.1.0&q=85"},
+    {"id": "3", "name": "Emily Rodriguez", "specialty": "contract", "email": "emily.rodriguez@legalfirm.com", "image_url": "https://images.pexels.com/photos/34078744/pexels-photo-34078744.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"},
+    {"id": "4", "name": "Michael Thompson", "specialty": "NDA", "email": "michael.thompson@legalfirm.com", "image_url": "https://images.unsplash.com/photo-1604241842992-1f5e733449cc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwyfHxsYXd5ZXIlMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NzU2ODMwNzd8MA&ixlib=rb-4.1.0&q=85"},
+]
+
+def send_email(to_email: str, subject: str, body: str):
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = os.environ['EMAIL_ADDRESS']
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+        
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(os.environ['EMAIL_ADDRESS'], os.environ['EMAIL_APP_PASSWORD'])
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        logging.error(f"Email send failed: {e}")
+        return False
+
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    text = ""
+    for page in doc:
+        text += page.get_text()
+    doc.close()
+    return text
+
+def detect_document_type(text: str) -> str:
+    prompt = f"""Analyze this legal document and classify it as ONE of these types: contract, lease, employment, NDA.
+Return ONLY the type, nothing else.
+
+Document text:
+{text[:2000]}"""
     
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
+    response = groq_client.chat.completions.create(
+        messages=[{"role": "user", "content": prompt}],
+        model="llama-3.3-70b-versatile",
+        temperature=0.1
+    )
+    doc_type = response.choices[0].message.content.strip().lower()
+    if doc_type not in ["contract", "lease", "employment", "nda"]:
+        doc_type = "contract"
+    return doc_type
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
+def simplify_document(text: str, user_level: str) -> str:
+    level_prompts = {
+        "beginner": "Explain this legal document in VERY SIMPLE terms as if to someone with no legal knowledge. Use everyday language, bullet points, and avoid legal jargon.",
+        "intermediate": "Explain this legal document in moderate detail. Use some legal terms but explain them clearly.",
+        "advanced": "Provide a detailed legal analysis of this document with comprehensive explanations."
+    }
     
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
+    prompt = f"""{level_prompts.get(user_level, level_prompts['beginner'])}
 
-# Include the router in the main app
+Document text:
+{text[:3000]}
+
+Provide a simplified explanation in bullet points."""
+    
+    response = groq_client.chat.completions.create(
+        messages=[{"role": "user", "content": prompt}],
+        model="llama-3.3-70b-versatile",
+        temperature=0.3
+    )
+    return response.choices[0].message.content
+
+def extract_clauses(text: str) -> tuple:
+    prompt = f"""Analyze this legal document and extract 10-15 key clauses.
+
+For each clause, provide:
+- text: the actual clause text (keep it concise, max 150 chars)
+- type: category (payment, liability, termination, penalty, warranty, confidentiality, dispute, duration, obligation, rights)
+- severity: low, medium, or high
+- score: risk score 0-100
+- explanation: brief explanation of the risk
+
+Return ONLY a valid JSON array of objects. No markdown, no extra text.
+
+Document:
+{text[:4000]}"""
+    
+    response = groq_client.chat.completions.create(
+        messages=[{"role": "user", "content": prompt}],
+        model="llama-3.3-70b-versatile",
+        temperature=0.2
+    )
+    
+    content = response.choices[0].message.content.strip()
+    content = content.replace('```json', '').replace('```', '').strip()
+    
+    try:
+        clauses = json.loads(content)
+        if len(clauses) > 20:
+            clauses = clauses[:20]
+        
+        total_score = sum(c.get('score', 0) for c in clauses)
+        risk_score = min(100, int(total_score / len(clauses))) if clauses else 0
+        
+        return clauses, risk_score
+    except:
+        return [], 0
+
+def highlight_pdf(pdf_bytes: bytes, clauses: List[Dict]) -> bytes:
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    
+    color_map = {
+        "high": (1, 0.8, 0.8),
+        "medium": (1, 0.95, 0.8),
+        "low": (0.9, 1, 0.9)
+    }
+    
+    for clause in clauses[:15]:
+        text_to_find = clause['text'][:100]
+        severity = clause.get('severity', 'low')
+        color = color_map.get(severity, (0.9, 1, 0.9))
+        
+        for page in doc:
+            text_instances = page.search_for(text_to_find)
+            for inst in text_instances[:2]:
+                highlight = page.add_highlight_annot(inst)
+                highlight.set_colors(stroke=color)
+                highlight.update()
+    
+    output = io.BytesIO()
+    doc.save(output)
+    doc.close()
+    return output.getvalue()
+
+def generate_graph_data(clauses: List[Dict]) -> Dict:
+    nodes = []
+    edges = []
+    
+    clause_keywords = ['payment', 'liability', 'termination', 'penalty']
+    
+    limited_clauses = clauses[:15]
+    
+    for i, clause in enumerate(limited_clauses):
+        severity = clause.get('severity', 'low')
+        color_map = {'high': '#B91C1C', 'medium': '#B45309', 'low': '#166534'}
+        nodes.append({
+            'id': i,
+            'name': f"{clause.get('type', 'clause').title()} {i+1}",
+            'val': 10,
+            'color': color_map.get(severity, '#166534')
+        })
+    
+    for i, clause_i in enumerate(limited_clauses):
+        for j, clause_j in enumerate(limited_clauses):
+            if i < j:
+                if clause_i.get('type') == clause_j.get('type'):
+                    edges.append({'source': i, 'target': j})
+                else:
+                    text_i = clause_i.get('text', '').lower()
+                    text_j = clause_j.get('text', '').lower()
+                    if any(kw in text_i and kw in text_j for kw in clause_keywords):
+                        edges.append({'source': i, 'target': j})
+    
+    return {'nodes': nodes, 'links': edges}
+
+@api_router.post("/auth/signin")
+async def signin(request: SignInRequest):
+    existing = await db.users.find_one({"email": request.email}, {"_id": 0})
+    if existing:
+        if isinstance(existing.get('created_at'), str):
+            existing['created_at'] = datetime.fromisoformat(existing['created_at'])
+        return existing
+    
+    user = User(name=request.name, email=request.email)
+    doc = user.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.users.insert_one(doc)
+    return user
+
+@api_router.post("/survey")
+async def submit_survey(request: SurveyRequest):
+    await db.users.update_one(
+        {"id": request.user_id},
+        {"$set": {"user_level": request.user_level}}
+    )
+    return {"success": True}
+
+@api_router.post("/upload")
+async def upload_document(file: UploadFile = File(...), user_id: str = "", user_level: str = "beginner"):
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(400, "Only PDF files allowed")
+    
+    pdf_bytes = await file.read()
+    text = extract_text_from_pdf(pdf_bytes)
+    
+    if not text.strip():
+        raise HTTPException(400, "Could not extract text from PDF")
+    
+    doc_type = detect_document_type(text)
+    simplified = simplify_document(text, user_level)
+    clauses, risk_score = extract_clauses(text)
+    highlighted_pdf = highlight_pdf(pdf_bytes, clauses)
+    
+    document = Document(
+        user_id=user_id,
+        filename=file.filename,
+        doc_type=doc_type,
+        simplified_text=simplified,
+        clauses=clauses,
+        risk_score=risk_score,
+        pdf_base64=base64.b64encode(pdf_bytes).decode('utf-8'),
+        highlighted_pdf_base64=base64.b64encode(highlighted_pdf).decode('utf-8')
+    )
+    
+    doc_dict = document.model_dump()
+    doc_dict['created_at'] = doc_dict['created_at'].isoformat()
+    await db.documents.insert_one(doc_dict)
+    
+    return {"document_id": document.id, "doc_type": doc_type, "risk_score": risk_score}
+
+@api_router.get("/document/{doc_id}")
+async def get_document(doc_id: str):
+    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0, "pdf_base64": 0})
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    return doc
+
+@api_router.get("/graph/{doc_id}")
+async def get_graph(doc_id: str):
+    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0, "clauses": 1})
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    graph_data = generate_graph_data(doc.get('clauses', []))
+    return graph_data
+
+@api_router.get("/pdf/highlighted/{doc_id}")
+async def download_highlighted_pdf(doc_id: str):
+    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0, "highlighted_pdf_base64": 1})
+    if not doc or not doc.get('highlighted_pdf_base64'):
+        raise HTTPException(404, "Highlighted PDF not found")
+    return {"pdf_base64": doc['highlighted_pdf_base64']}
+
+@api_router.post("/consultation/book")
+async def book_consultation(request: ConsultationRequest):
+    doc = await db.documents.find_one({"id": request.document_id}, {"_id": 0, "doc_type": 1})
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    
+    doc_type = doc['doc_type']
+    lawyer = next((l for l in mock_lawyers if l['specialty'] == doc_type), mock_lawyers[0])
+    
+    lawyer_email_body = f"""New Consultation Request
+
+Client Name: {request.user_name}
+Client Email: {request.user_email}
+Preferred Time: {request.preferred_time}
+Document Type: {doc_type}
+Document ID: {request.document_id}
+
+Please contact the client to schedule the consultation."""
+    
+    user_email_body = f"""Dear {request.user_name},
+
+Your consultation request has been received.
+
+Lawyer: {lawyer['name']}
+Specialty: {lawyer['specialty'].title()}
+Preferred Time: {request.preferred_time}
+
+The lawyer will contact you shortly at {request.user_email}.
+
+Best regards,
+Legal Sage Team"""
+    
+    send_email(lawyer['email'], "New Consultation Request", lawyer_email_body)
+    send_email(request.user_email, "Consultation Confirmation", user_email_body)
+    
+    return {"success": True, "lawyer": lawyer}
+
+@api_router.post("/chat")
+async def chat(request: ChatRequest):
+    doc = await db.documents.find_one({"id": request.document_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    
+    history = await db.chat_messages.find(
+        {"document_id": request.document_id},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(20)
+    
+    messages = [{"role": "system", "content": f"""You are a helpful legal assistant. Answer questions about this {doc['doc_type']} document.
+
+Key clauses:
+{json.dumps(doc['clauses'][:5], indent=2)}
+
+Simplified explanation:
+{doc['simplified_text'][:500]}
+
+Rules:
+- Explain simply
+- Do NOT give legal advice
+- Only provide guidance
+- Reference specific clauses when relevant"""}]
+    
+    for h in history[-10:]:
+        messages.append({"role": h['role'], "content": h['content']})
+    
+    messages.append({"role": "user", "content": request.message})
+    
+    response = groq_client.chat.completions.create(
+        messages=messages,
+        model="llama-3.3-70b-versatile",
+        temperature=0.5
+    )
+    
+    assistant_message = response.choices[0].message.content
+    
+    user_msg = ChatMessage(document_id=request.document_id, role="user", content=request.message)
+    assistant_msg = ChatMessage(document_id=request.document_id, role="assistant", content=assistant_message)
+    
+    user_dict = user_msg.model_dump()
+    user_dict['created_at'] = user_dict['created_at'].isoformat()
+    assistant_dict = assistant_msg.model_dump()
+    assistant_dict['created_at'] = assistant_dict['created_at'].isoformat()
+    
+    await db.chat_messages.insert_many([user_dict, assistant_dict])
+    
+    return {"response": assistant_message}
+
+@api_router.get("/lawyers")
+async def get_lawyers():
+    return mock_lawyers
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -77,7 +433,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'

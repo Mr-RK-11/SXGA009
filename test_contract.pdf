@@ -1,0 +1,83 @@
+%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+/Resources <<
+/Font <<
+/F1 5 0 R
+>>
+>>
+>>
+endobj
+
+4 0 obj
+<<
+/Length 800
+>>
+stream
+BT
+/F1 12 Tf
+50 750 Td
+(EMPLOYMENT AGREEMENT) Tj
+0 -30 Td
+(This Employment Agreement is entered into between Company ABC and Employee John Doe.) Tj
+0 -30 Td
+(TERMS AND CONDITIONS:) Tj
+0 -30 Td
+(1. EMPLOYMENT TERM: This agreement shall commence on January 1, 2024 and continue until terminated.) Tj
+0 -30 Td
+(2. COMPENSATION: Employee shall receive a salary of $50,000 per year.) Tj
+0 -30 Td
+(3. TERMINATION: Either party may terminate this agreement with 30 days written notice.) Tj
+0 -30 Td
+(4. CONFIDENTIALITY: Employee agrees to maintain confidentiality of all company information.) Tj
+0 -30 Td
+(5. LIABILITY: Company shall not be liable for any damages exceeding $1,000.) Tj
+0 -30 Td
+(This agreement is governed by the laws of the State of California.) Tj
+ET
+endstream
+endobj
+
+5 0 obj
+<<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+endobj
+
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000274 00000 n 
+0000001126 00000 n 
+trailer
+<<
+/Size 6
+/Root 1 0 R
+>>
+startxref
+1185
+%%EOF
