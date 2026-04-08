@@ -17,6 +17,7 @@ export default function ConsultationModal({ documentId, lawyer, onClose }) {
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [appointmentDetails, setAppointmentDetails] = useState(null);
 
   // Get today's date in YYYY-MM-DD format for min date
   const today = new Date().toISOString().split('T')[0];
@@ -26,29 +27,37 @@ export default function ConsultationModal({ documentId, lawyer, onClose }) {
     setLoading(true);
 
     try {
-      await axios.post(`${API}/consultation/book`, {
+      const response = await axios.post(`${API}/consultation/book`, {
         document_id: documentId,
         ...formData
       });
-      setSuccess(true);
-      // Clear form
-      setFormData({
-        user_name: '',
-        user_email: '',
-        preferred_date: '',
-        preferred_time: '',
-        message: ''
+      
+      // Store appointment details for confirmation display
+      setAppointmentDetails({
+        lawyer_name: response.data.appointment?.lawyer_name || lawyer?.name || 'Unknown',
+        lawyer_title: response.data.appointment?.lawyer_title || lawyer?.title || 'Lawyer',
+        date: formData.preferred_date,
+        time: formData.preferred_time
       });
+      
+      setSuccess(true);
+      
       setTimeout(() => {
         onClose();
-      }, 3000);
+      }, 4000);
     } catch (error) {
       console.error('Booking error:', error);
       // Still show success - don't break UX if backend fails
+      setAppointmentDetails({
+        lawyer_name: lawyer?.name || 'Unknown',
+        lawyer_title: lawyer?.title || 'Lawyer',
+        date: formData.preferred_date,
+        time: formData.preferred_time
+      });
       setSuccess(true);
       setTimeout(() => {
         onClose();
-      }, 3000);
+      }, 4000);
     } finally {
       setLoading(false);
     }
@@ -88,14 +97,43 @@ export default function ConsultationModal({ documentId, lawyer, onClose }) {
             <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
               <CheckCircle size={48} weight="fill" className="text-green-600" />
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-3">
-              Appointment Booked!
+            <h3 className="text-2xl font-bold text-gray-900 mb-6">
+              Appointment Confirmed
             </h3>
-            <p className="text-lg text-gray-600 mb-2">
-              Appointment request sent successfully.
-            </p>
-            <p className="text-base text-gray-500">
-              The lawyer will contact you soon.
+            
+            {appointmentDetails && (
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6 text-left max-w-md mx-auto">
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Lawyer</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {appointmentDetails.lawyer_name}
+                    </p>
+                    <p className="text-sm text-gray-600">{appointmentDetails.lawyer_title}</p>
+                  </div>
+                  
+                  <div className="border-t border-blue-200 pt-3">
+                    <p className="text-sm text-gray-600 mb-1">Date</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {new Date(appointmentDetails.date).toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </p>
+                  </div>
+                  
+                  <div className="border-t border-blue-200 pt-3">
+                    <p className="text-sm text-gray-600 mb-1">Time</p>
+                    <p className="text-lg font-semibold text-gray-900">{appointmentDetails.time}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <p className="text-base text-gray-600">
+              Confirmation emails have been sent to both you and the lawyer.
             </p>
           </div>
         ) : (

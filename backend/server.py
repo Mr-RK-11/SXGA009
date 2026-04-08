@@ -112,23 +112,33 @@ mock_lawyers = [
     {"id": "8", "name": "Pooja Nair", "title": "Business Lawyer", "specialty": "nda", "email": "business.lawyer2@gmail.com", "image_url": "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=400"},
 ]
 
-def send_email(to_email: str, subject: str, body: str):
-    """Send email with error handling - returns True/False but doesn't raise exceptions"""
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = os.environ['EMAIL_ADDRESS']
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
-        
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
-            server.login(os.environ['EMAIL_ADDRESS'], os.environ['EMAIL_APP_PASSWORD'])
-            server.send_message(msg)
-        logging.info(f"Email sent successfully to {to_email}")
-        return True
-    except Exception as e:
-        logging.error(f"Email send failed to {to_email}: {e}")
-        return False
+def send_email(to_email: str, subject: str, body: str, retry=True):
+    """Send email with error handling and retry logic"""
+    max_attempts = 2 if retry else 1
+    
+    for attempt in range(max_attempts):
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = os.environ['EMAIL_ADDRESS']
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'plain'))
+            
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
+                server.login(os.environ['EMAIL_ADDRESS'], os.environ['EMAIL_APP_PASSWORD'])
+                server.send_message(msg)
+            
+            logging.info(f"✓ Email sent successfully to {to_email} - Subject: {subject}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"✗ Email send failed to {to_email} (Attempt {attempt + 1}/{max_attempts}): {e}")
+            if attempt < max_attempts - 1:
+                logging.info(f"  Retrying email to {to_email}...")
+                continue
+            return False
+    
+    return False
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -347,70 +357,87 @@ async def book_consultation(request: ConsultationRequest):
     
     doc_type = doc['doc_type']
     risk_score = doc.get('risk_score', 0)
-    clauses = doc.get('clauses', [])
-    
-    # Get top 2 risky clauses
-    sorted_clauses = sorted(clauses, key=lambda x: x.get('score', 0), reverse=True)
-    top_risky = sorted_clauses[:2]
     
     # Get all lawyers matching this specialty
     matching_lawyers = [l for l in mock_lawyers if l['specialty'] == doc_type.lower()]
     # Pick first one or fallback to first lawyer
     lawyer = matching_lawyers[0] if matching_lawyers else mock_lawyers[0]
     
-    risky_clauses_text = "\n".join([
-        f"{i+1}. {clause.get('type', 'Unknown').title()}: {clause.get('text', 'N/A')[:100]}... (Risk Score: {clause.get('score', 0)})"
-        for i, clause in enumerate(top_risky)
-    ])
+    # EMAIL TO LAWYER
+    lawyer_email_subject = "Appointment Scheduled"
+    lawyer_email_body = f"""New consultation scheduled.
+
+Client Name: {request.user_name}
+Client Email: {request.user_email}
+
+Document Type: {doc_type.upper()}
+Risk Score: {risk_score}
+
+Date: {request.preferred_date}
+Time: {request.preferred_time}
+
+{f'Additional Notes: {request.message}' if request.message else ''}"""
     
-    lawyer_email_body = f"""New Appointment Request
+    # EMAIL TO USER
+    user_email_subject = "Appointment Confirmation"
+    user_email_body = f"""Hello {request.user_name},
 
-Client Information:
-- Name: {request.user_name}
-- Email: {request.user_email}
-- Preferred Date: {request.preferred_date}
-- Preferred Time: {request.preferred_time}
+Your consultation has been confirmed.
 
-Document Details:
-- Type: {doc_type.upper()}
-- Overall Risk Score: {risk_score}/100
-- Document ID: {request.document_id}
+Lawyer: {lawyer['name']}
+Specialization: {lawyer['title']}
 
-Top 2 Risky Clauses:
-{risky_clauses_text}
+Date: {request.preferred_date}
+Time: {request.preferred_time}
 
-{f'Client Message: {request.message}' if request.message else ''}
-
-Please contact the client to schedule the consultation."""
-    
-    user_email_body = f"""Dear {request.user_name},
-
-Your appointment request has been confirmed!
-
-Appointment Details:
-- Lawyer: {lawyer['name']} ({lawyer['title']})
-- Date: {request.preferred_date}
-- Time: {request.preferred_time}
-- Document Type: {doc_type.title()}
-
-{lawyer['name']} will contact you shortly at {request.user_email} to confirm the appointment.
+Please be available on time.
 
 Best regards,
 Legal Sage Team"""
     
-    # Send emails with error handling - don't fail if emails fail
-    try:
-        send_email(lawyer['email'], "New Appointment Request", lawyer_email_body)
-    except Exception as e:
-        logging.error(f"Failed to send email to lawyer: {e}")
+    # Send BOTH emails - log results but don't fail
+    logging.info(f"=== Booking Appointment for {request.user_name} ===")
     
+    # Send to lawyer
+    lawyer_email_sent = False
     try:
-        send_email(request.user_email, "Appointment Confirmation", user_email_body)
+        lawyer_email_sent = send_email(lawyer['email'], lawyer_email_subject, lawyer_email_body)
+        if lawyer_email_sent:
+            logging.info(f"✓ Lawyer email sent to {lawyer['name']} ({lawyer['email']})")
+        else:
+            logging.warning(f"⚠ Lawyer email failed to {lawyer['email']}")
     except Exception as e:
-        logging.error(f"Failed to send email to user: {e}")
+        logging.error(f"✗ Exception sending lawyer email: {e}")
     
-    # Always return success to frontend
-    return {"success": True, "lawyer": lawyer}
+    # Send to user
+    user_email_sent = False
+    try:
+        user_email_sent = send_email(request.user_email, user_email_subject, user_email_body)
+        if user_email_sent:
+            logging.info(f"✓ User email sent to {request.user_email}")
+        else:
+            logging.warning(f"⚠ User email failed to {request.user_email}")
+    except Exception as e:
+        logging.error(f"✗ Exception sending user email: {e}")
+    
+    # Log summary
+    logging.info(f"Email Summary - Lawyer: {'✓' if lawyer_email_sent else '✗'}, User: {'✓' if user_email_sent else '✗'}")
+    
+    # Always return success to frontend with appointment details
+    return {
+        "success": True,
+        "lawyer": lawyer,
+        "appointment": {
+            "date": request.preferred_date,
+            "time": request.preferred_time,
+            "lawyer_name": lawyer['name'],
+            "lawyer_title": lawyer['title']
+        },
+        "emails_sent": {
+            "lawyer": lawyer_email_sent,
+            "user": user_email_sent
+        }
+    }
 
 # Alias endpoint for simpler URL
 @api_router.post("/book-lawyer")
