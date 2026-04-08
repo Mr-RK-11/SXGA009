@@ -1,0 +1,145 @@
+{
+  "project_name": "Legal Sage",
+  "theme": "light",
+  "archetype": "Archetype 4 (Swiss & High-Contrast)",
+  "design_philosophy": {
+    "core_principles": [
+      "Maximum Legibility: Optimized for elderly users and officials with large type, strong hierarchy, and minimal cognitive load.",
+      "High Contrast & Clarity: Strict adherence to WCAG AA/AAA contrast ratios. No low-contrast grays, no glassmorphism.",
+      "Progressive Disclosure: Show only what's necessary. Reduce clutter on the dashboard to lower cognitive friction.",
+      "Swiss Structuralism: Use a rigid, grid-based layout with sharp borders and distinct sections instead of floating elements and soft shadows."
+    ],
+    "vibe": "Authoritative, Clear, Trustworthy, Accessible"
+  },
+  "colors": {
+    "backgrounds": {
+      "app": "#FFFFFF",
+      "card": "#F9FAFB",
+      "highlight_low": "#F0FDF4",
+      "highlight_medium": "#FFFBEB",
+      "highlight_high": "#FEF2F2"
+    },
+    "text": {
+      "primary": "#000000",
+      "secondary": "#374151",
+      "muted": "#4B5563"
+    },
+    "brand": {
+      "primary": "#0052CC",
+      "primary_hover": "#003D99",
+      "primary_foreground": "#FFFFFF"
+    },
+    "status_risk": {
+      "low": "#166534",
+      "medium": "#B45309",
+      "high": "#B91C1C",
+      "low_border": "#BBF7D0",
+      "medium_border": "#FDE68A",
+      "high_border": "#FECACA"
+    },
+    "borders": {
+      "default": "#D1D5DB",
+      "focus": "#0052CC"
+    }
+  },
+  "typography": {
+    "font_families": {
+      "headings": "'IBM Plex Sans', sans-serif",
+      "body": "'IBM Plex Sans', sans-serif",
+      "mono": "'IBM Plex Mono', monospace"
+    },
+    "scales": {
+      "h1": "text-4xl sm:text-5xl font-bold tracking-tight text-black leading-tight",
+      "h2": "text-2xl sm:text-3xl font-semibold tracking-tight text-black",
+      "h3": "text-xl sm:text-2xl font-semibold text-gray-900",
+      "h4": "text-lg sm:text-xl font-medium text-gray-900",
+      "body_large": "text-lg text-gray-800 leading-relaxed",
+      "body_base": "text-base text-gray-800 leading-relaxed",
+      "labels": "text-sm font-semibold tracking-[0.05em] uppercase text-gray-700"
+    },
+    "rules": [
+      "Base font size must be effectively text-lg for optimal elderly readability.",
+      "Never use font weights below 400 (regular). Prefer 500 (medium) for interactive elements.",
+      "Ensure all headings use tight tracking (`tracking-tight`) to maintain structural look."
+    ]
+  },
+  "layout_and_spacing": {
+    "spacing_scale": {
+      "container_padding": "p-6 sm:p-8 md:p-12",
+      "section_gap": "gap-8 md:gap-12",
+      "element_gap": "gap-4 md:gap-6"
+    },
+    "grids": {
+      "dashboard_bento": "grid grid-cols-1 md:grid-cols-3 gap-6",
+      "clauses_list": "grid grid-cols-1 gap-4"
+    },
+    "surfaces": {
+      "cards": "bg-gray-50 border-2 border-gray-200 rounded-none md:rounded-md shadow-none",
+      "interactive_cards": "hover:bg-gray-100 hover:border-gray-300 transition-colors duration-200 cursor-pointer",
+      "modals": "bg-white border-2 border-gray-900 rounded-md shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-8"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#0052CC] text-white font-semibold text-lg px-6 py-3 rounded-md border-2 border-transparent hover:bg-[#003D99] focus:ring-4 focus:ring-blue-300 transition-all",
+      "secondary": "bg-white text-gray-900 font-semibold text-lg px-6 py-3 rounded-md border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 focus:ring-4 focus:ring-gray-200 transition-all",
+      "danger": "bg-[#B91C1C] text-white font-semibold text-lg px-6 py-3 rounded-md hover:bg-[#991B1B] focus:ring-4 focus:ring-red-300 transition-all"
+    },
+    "inputs": {
+      "text": "bg-white border-2 border-gray-300 text-gray-900 text-lg rounded-md focus:border-[#0052CC] focus:ring-2 focus:ring-[#0052CC] p-3 w-full",
+      "select": "bg-white border-2 border-gray-300 text-gray-900 text-lg rounded-md focus:border-[#0052CC] focus:ring-2 focus:ring-[#0052CC] p-3 w-full"
+    },
+    "badges": {
+      "low_risk": "bg-green-100 text-green-800 border-2 border-green-200 text-sm font-bold px-3 py-1 rounded-full uppercase tracking-wide",
+      "medium_risk": "bg-yellow-100 text-yellow-800 border-2 border-yellow-300 text-sm font-bold px-3 py-1 rounded-full uppercase tracking-wide",
+      "high_risk": "bg-red-100 text-red-800 border-2 border-red-200 text-sm font-bold px-3 py-1 rounded-full uppercase tracking-wide"
+    },
+    "navigation": "bg-white border-b-2 border-gray-200 py-4 px-6 md:px-12 flex justify-between items-center sticky top-0 z-50",
+    "graph_visualization": "Simple D3.js or react-force-graph-2d. Clean white background. Nodes colored by risk level (Red/Yellow/Green). Large text labels on nodes. Strict max 15 nodes. High contrast borders on nodes."
+  },
+  "interactions_and_accessibility": {
+    "hover_states": "Must significantly darken the background or text color to maintain contrast. Provide a 2px border shift if background doesn't change.",
+    "focus_states": "All interactive elements MUST have a visible focus ring (e.g., `focus:ring-4 focus:ring-blue-300 focus:outline-none`).",
+    "motion": "Keep minimal. Use fast, simple opacity and transform transitions (e.g., `duration-150 ease-in-out`). Avoid bouncy or dramatic effects.",
+    "data_testid": "ALL buttons, links, inputs, and major sections must have descriptive kebab-case `data-testid` attributes (e.g., `upload-pdf-button`, `clause-card-high-risk`).",
+    "screen_readers": "Ensure proper ARIA labels for the upload zone and the interactive graph."
+  },
+  "media_assets": {
+    "icons": {
+      "library": "@phosphor-icons/react",
+      "style": "Regular or Bold weight, size 24px or 32px for clear visibility. Avoid Light or Thin weights."
+    },
+    "images": [
+      {
+        "category": "hero_background_abstract",
+        "url": "https://images.pexels.com/photos/245219/pexels-photo-245219.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Clean, organized minimalist modern office. Use as a heavily muted, low-opacity background or hero image if needed."
+      },
+      {
+        "category": "lawyer_profile_1",
+        "url": "https://images.pexels.com/photos/34078744/pexels-photo-34078744.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Smiling female lawyer in professional setting. Use for the Lawyer Consultation Booking interface."
+      },
+      {
+        "category": "lawyer_profile_2",
+        "url": "https://images.unsplash.com/photo-1604241842992-1f5e733449cc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwyfHxsYXd5ZXIlMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NzU2ODMwNzd8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Man in a suit near a wooden table. Alternative lawyer profile."
+      },
+      {
+        "category": "document_placeholder",
+        "url": "https://images.unsplash.com/photo-1603796846097-bee99e4a601f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNzl8MHwxfHNlYXJjaHwxfHxsZWdhbCUyMGRvY3VtZW50fGVufDB8fHx8MTc3NTY4MzA3N3ww&ixlib=rb-4.1.0&q=85",
+        "description": "Writing on a legal document. Use for empty states in document upload or analysis."
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Prioritize the `IBM Plex Sans` font for all UI elements to ensure clean, structured, and large text perfect for elderly legibility. Make the default text size `text-lg` where possible.",
+    "Do NOT use `Card` components from Shadcn if they rely on soft drop-shadows. Override them to have flat backgrounds and solid 2px borders (`border-2 border-gray-200`).",
+    "The UI should feel like a 'Control Room' for legal documents. High contrast, no gradient overlays, and no decorative glassmorphism.",
+    "Use @phosphor-icons/react for highly visible icons (Regular or Bold weight).",
+    "For the Graph visualization (Node/Edge), keep it minimal. Use simple circles for nodes colored by risk (Red, Yellow, Green) and plain solid lines for edges. Restrict to max 15 nodes to avoid clutter, as requested.",
+    "Implement the UI using pure HTML+Tailwind for layouts, and Shadcn for interactive pieces (Select, Modals, Forms), but customize Shadcn to strip away 'Vercel-like' subtleties in favor of strong Swiss structuralism.",
+    "Highlighting the PDF should be visually distinct: high contrast Red/Orange/Green backgrounds for the text, with text color adjusted if necessary to ensure readability.",
+    "MANDATORY: Add `data-testid` attributes to all functional elements."
+  ]
+}
