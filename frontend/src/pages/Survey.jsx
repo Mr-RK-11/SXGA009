@@ -1,13 +1,76 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { GraduationCap, BookOpen, Certificate } from '@phosphor-icons/react';
+import { CheckCircle } from '@phosphor-icons/react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const QUESTIONS = [
+  {
+    id: 1,
+    question: "How familiar are you with legal documents?",
+    options: [
+      "I've never read a legal document before",
+      "I've read a few but find them confusing",
+      "I understand basic legal documents",
+      "I regularly work with legal documents"
+    ]
+  },
+  {
+    id: 2,
+    question: "Do you understand legal terms like 'liability' and 'indemnification'?",
+    options: [
+      "I don't know these terms at all",
+      "I've heard them but don't understand",
+      "I understand basic legal terms",
+      "I'm comfortable with legal terminology"
+    ]
+  },
+  {
+    id: 3,
+    question: "Have you ever signed a contract or legal agreement?",
+    options: [
+      "Never",
+      "Once or twice, with help",
+      "Several times",
+      "Regularly, I review them myself"
+    ]
+  },
+  {
+    id: 4,
+    question: "How comfortable are you identifying risks in a contract?",
+    options: [
+      "Not comfortable at all",
+      "Slightly comfortable",
+      "Moderately comfortable",
+      "Very comfortable"
+    ]
+  },
+  {
+    id: 5,
+    question: "What's your background with legal matters?",
+    options: [
+      "No legal background",
+      "Basic understanding from personal experience",
+      "Some formal training or education",
+      "Professional legal background"
+    ]
+  },
+  {
+    id: 6,
+    question: "When reading a contract, how much detail do you prefer?",
+    options: [
+      "Simple summary in plain language",
+      "Basic explanation with some details",
+      "Moderate detail with legal terms explained",
+      "Full legal analysis with terminology"
+    ]
+  }
+];
+
 export default function Survey() {
-  const [selectedLevel, setSelectedLevel] = useState('');
+  const [answers, setAnswers] = useState({});
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -18,106 +81,122 @@ export default function Survey() {
     }
   }, [navigate]);
 
-  const handleSubmit = async () => {
-    if (!selectedLevel) return;
+  const handleAnswer = (questionId, optionIndex) => {
+    setAnswers(prev => ({ ...prev, [questionId]: optionIndex }));
+  };
 
+  const calculateLevel = (score) => {
+    if (score <= 6) return 'beginner';
+    if (score <= 12) return 'intermediate';
+    return 'advanced';
+  };
+
+  const handleSubmit = async () => {
+    if (Object.keys(answers).length !== QUESTIONS.length) {
+      alert('Please answer all questions');
+      return;
+    }
+
+    const totalScore = Object.values(answers).reduce((sum, score) => sum + score, 0);
+    const userLevel = calculateLevel(totalScore);
+    
     const user = JSON.parse(localStorage.getItem('user'));
     setLoading(true);
     
     try {
       await axios.post(`${API}/survey`, {
         user_id: user.id,
-        user_level: selectedLevel
+        score: totalScore,
+        user_level: userLevel
       });
       
-      user.user_level = selectedLevel;
+      user.user_level = userLevel;
+      user.survey_score = totalScore;
       localStorage.setItem('user', JSON.stringify(user));
       navigate('/upload');
     } catch (error) {
       console.error('Survey error:', error);
-      alert('Failed to save preferences. Please try again.');
+      alert('Failed to save survey. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const levels = [
-    {
-      id: 'beginner',
-      title: 'Beginner',
-      description: 'Little to no legal knowledge. Need simple explanations.',
-      icon: BookOpen
-    },
-    {
-      id: 'intermediate',
-      title: 'Intermediate',
-      description: 'Some understanding of legal terms. Need moderate detail.',
-      icon: GraduationCap
-    },
-    {
-      id: 'advanced',
-      title: 'Advanced',
-      description: 'Strong legal background. Need comprehensive analysis.',
-      icon: Certificate
-    }
-  ];
+  const allAnswered = Object.keys(answers).length === QUESTIONS.length;
+  const progress = (Object.keys(answers).length / QUESTIONS.length) * 100;
 
   return (
-    <div className="min-h-screen bg-white p-6 md:p-12">
+    <div className="min-h-screen bg-[#F8FAFC] p-6 md:p-12">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-12">
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-black leading-tight mb-4">
-            Legal Knowledge Survey
+        <div className="mb-8">
+          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-3">
+            Legal Knowledge Assessment
           </h1>
-          <p className="text-lg text-gray-800 leading-relaxed">
-            Help us tailor the document analysis to your understanding level.
+          <p className="text-lg text-gray-600">
+            Help us personalize your document analysis experience
+          </p>
+          
+          {/* Progress Bar */}
+          <div className="mt-6 bg-gray-200 rounded-full h-3 overflow-hidden">
+            <div 
+              className="bg-[#2563EB] h-full transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="text-sm text-gray-500 mt-2">
+            {Object.keys(answers).length} of {QUESTIONS.length} questions answered
           </p>
         </div>
 
-        <div className="space-y-6 mb-8">
-          {levels.map((level) => {
-            const Icon = level.icon;
-            const isSelected = selectedLevel === level.id;
-            
-            return (
-              <button
-                key={level.id}
-                data-testid={`survey-level-${level.id}`}
-                onClick={() => setSelectedLevel(level.id)}
-                className={`w-full text-left bg-gray-50 border-2 rounded-md p-6 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-blue-300 ${
-                  isSelected
-                    ? 'border-[#0052CC] bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-100'
-                }`}
-              >
-                <div className="flex items-start gap-4">
-                  <div className={`p-3 rounded-md ${
-                    isSelected ? 'bg-[#0052CC]' : 'bg-gray-200'
-                  }`}>
-                    <Icon size={32} weight="bold" className={isSelected ? 'text-white' : 'text-gray-700'} />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">
-                      {level.title}
-                    </h3>
-                    <p className="text-base text-gray-800 leading-relaxed">
-                      {level.description}
-                    </p>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+        <div className="space-y-8">
+          {QUESTIONS.map((q, qIndex) => (
+            <div 
+              key={q.id}
+              className="bg-white rounded-lg shadow-sm p-6 md:p-8 transform transition-all duration-300 hover:shadow-md"
+            >
+              <h3 className="text-xl font-semibold text-gray-900 mb-6">
+                {qIndex + 1}. {q.question}
+              </h3>
+              <div className="space-y-3">
+                {q.options.map((option, optionIndex) => {
+                  const isSelected = answers[q.id] === optionIndex;
+                  return (
+                    <button
+                      key={optionIndex}
+                      data-testid={`survey-q${q.id}-option${optionIndex}`}
+                      onClick={() => handleAnswer(q.id, optionIndex)}
+                      className={`w-full text-left p-4 rounded-lg border-2 transition-all duration-200 transform hover:scale-[1.02] ${
+                        isSelected
+                          ? 'border-[#2563EB] bg-blue-50 shadow-sm'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-base text-gray-800 pr-4">
+                          {option}
+                        </span>
+                        {isSelected && (
+                          <CheckCircle size={24} weight="fill" className="text-[#2563EB] flex-shrink-0" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
-        <button
-          data-testid="survey-submit-button"
-          onClick={handleSubmit}
-          disabled={!selectedLevel || loading}
-          className="bg-[#0052CC] text-white font-semibold text-lg px-6 py-3 rounded-md border-2 border-transparent hover:bg-[#003D99] focus:ring-4 focus:ring-blue-300 focus:outline-none transition-all disabled:opacity-50"
-        >
-          {loading ? 'Saving...' : 'Continue'}
-        </button>
+        <div className="mt-8 sticky bottom-6">
+          <button
+            data-testid="survey-submit-button"
+            onClick={handleSubmit}
+            disabled={!allAnswered || loading}
+            className="w-full bg-[#2563EB] text-white font-semibold text-lg px-8 py-4 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 focus:outline-none transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transform hover:scale-[1.02]"
+          >
+            {loading ? 'Submitting...' : allAnswered ? 'Continue to Upload' : `Answer ${QUESTIONS.length - Object.keys(answers).length} More Questions`}
+          </button>
+        </div>
       </div>
     </div>
   );

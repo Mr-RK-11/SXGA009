@@ -45,6 +45,7 @@ class SignInRequest(BaseModel):
 
 class SurveyRequest(BaseModel):
     user_id: str
+    score: int
     user_level: str
 
 class Clause(BaseModel):
@@ -64,8 +65,6 @@ class Document(BaseModel):
     simplified_text: str
     clauses: List[Dict[str, Any]]
     risk_score: int
-    pdf_base64: str
-    highlighted_pdf_base64: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ChatMessage(BaseModel):
@@ -85,6 +84,7 @@ class ConsultationRequest(BaseModel):
     user_name: str
     user_email: str
     preferred_time: str
+    message: Optional[str] = ""
 
 class Lawyer(BaseModel):
     id: str
@@ -94,10 +94,10 @@ class Lawyer(BaseModel):
     image_url: str
 
 mock_lawyers = [
-    {"id": "1", "name": "Sarah Mitchell", "specialty": "lease", "email": "sarah.mitchell@legalfirm.com", "image_url": "https://images.pexels.com/photos/34078744/pexels-photo-34078744.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"},
-    {"id": "2", "name": "David Chen", "specialty": "employment", "email": "david.chen@legalfirm.com", "image_url": "https://images.unsplash.com/photo-1604241842992-1f5e733449cc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwyfHxsYXd5ZXIlMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NzU2ODMwNzd8MA&ixlib=rb-4.1.0&q=85"},
-    {"id": "3", "name": "Emily Rodriguez", "specialty": "contract", "email": "emily.rodriguez@legalfirm.com", "image_url": "https://images.pexels.com/photos/34078744/pexels-photo-34078744.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"},
-    {"id": "4", "name": "Michael Thompson", "specialty": "NDA", "email": "michael.thompson@legalfirm.com", "image_url": "https://images.unsplash.com/photo-1604241842992-1f5e733449cc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwyfHxsYXd5ZXIlMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NzU2ODMwNzd8MA&ixlib=rb-4.1.0&q=85"},
+    {"id": "1", "name": "Sarah Mitchell", "title": "Property Lawyer", "specialty": "lease", "email": "sarah.mitchell@legalfirm.com", "image_url": "https://images.pexels.com/photos/34078744/pexels-photo-34078744.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"},
+    {"id": "2", "name": "David Chen", "title": "HR Lawyer", "specialty": "employment", "email": "david.chen@legalfirm.com", "image_url": "https://images.unsplash.com/photo-1604241842992-1f5e733449cc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwyfHxsYXd5ZXIlMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NzU2ODMwNzd8MA&ixlib=rb-4.1.0&q=85"},
+    {"id": "3", "name": "Emily Rodriguez", "title": "Corporate Lawyer", "specialty": "contract", "email": "emily.rodriguez@legalfirm.com", "image_url": "https://images.pexels.com/photos/34078744/pexels-photo-34078744.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"},
+    {"id": "4", "name": "Michael Thompson", "title": "Business Lawyer", "specialty": "nda", "email": "michael.thompson@legalfirm.com", "image_url": "https://images.unsplash.com/photo-1604241842992-1f5e733449cc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwyfHxsYXd5ZXIlMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NzU2ODMwNzd8MA&ixlib=rb-4.1.0&q=85"},
 ]
 
 def send_email(to_email: str, subject: str, body: str):
@@ -143,9 +143,9 @@ Document text:
 
 def simplify_document(text: str, user_level: str) -> str:
     level_prompts = {
-        "beginner": "Explain this legal document in VERY SIMPLE terms as if to someone with no legal knowledge. Use everyday language, bullet points, and avoid legal jargon.",
-        "intermediate": "Explain this legal document in moderate detail. Use some legal terms but explain them clearly.",
-        "advanced": "Provide a detailed legal analysis of this document with comprehensive explanations."
+        "beginner": "Explain this legal document as if you're talking to a 15-year-old. Use NO legal jargon whatsoever. Use everyday simple language, short sentences, and bullet points. Make it easy to understand.",
+        "intermediate": "Explain this legal document in moderate detail. You can use some legal terms but explain them clearly in simple words. Use bullet points.",
+        "advanced": "Provide a detailed legal analysis of this document. Include legal terminology, deeper insights, and comprehensive explanations. Use bullet points for structure."
     }
     
     prompt = f"""{level_prompts.get(user_level, level_prompts['beginner'])}
@@ -153,7 +153,7 @@ def simplify_document(text: str, user_level: str) -> str:
 Document text:
 {text[:3000]}
 
-Provide a simplified explanation in bullet points."""
+Provide a clear explanation in bullet points."""
     
     response = groq_client.chat.completions.create(
         messages=[{"role": "user", "content": prompt}],
@@ -198,32 +198,6 @@ Document:
     except:
         return [], 0
 
-def highlight_pdf(pdf_bytes: bytes, clauses: List[Dict]) -> bytes:
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    
-    color_map = {
-        "high": (1, 0.8, 0.8),
-        "medium": (1, 0.95, 0.8),
-        "low": (0.9, 1, 0.9)
-    }
-    
-    for clause in clauses[:15]:
-        text_to_find = clause['text'][:100]
-        severity = clause.get('severity', 'low')
-        color = color_map.get(severity, (0.9, 1, 0.9))
-        
-        for page in doc:
-            text_instances = page.search_for(text_to_find)
-            for inst in text_instances[:2]:
-                highlight = page.add_highlight_annot(inst)
-                highlight.set_colors(stroke=color)
-                highlight.update()
-    
-    output = io.BytesIO()
-    doc.save(output)
-    doc.close()
-    return output.getvalue()
-
 def generate_graph_data(clauses: List[Dict]) -> Dict:
     nodes = []
     edges = []
@@ -234,12 +208,12 @@ def generate_graph_data(clauses: List[Dict]) -> Dict:
     
     for i, clause in enumerate(limited_clauses):
         severity = clause.get('severity', 'low')
-        color_map = {'high': '#B91C1C', 'medium': '#B45309', 'low': '#166534'}
+        color_map = {'high': '#DC2626', 'medium': '#F59E0B', 'low': '#16A34A'}
         nodes.append({
             'id': i,
             'name': f"{clause.get('type', 'clause').title()} {i+1}",
             'val': 10,
-            'color': color_map.get(severity, '#166534')
+            'color': color_map.get(severity, '#16A34A')
         })
     
     for i, clause_i in enumerate(limited_clauses):
@@ -273,9 +247,9 @@ async def signin(request: SignInRequest):
 async def submit_survey(request: SurveyRequest):
     await db.users.update_one(
         {"id": request.user_id},
-        {"$set": {"user_level": request.user_level}}
+        {"$set": {"user_level": request.user_level, "survey_score": request.score}}
     )
-    return {"success": True}
+    return {"success": True, "user_level": request.user_level}
 
 @api_router.post("/upload")
 async def upload_document(file: UploadFile = File(...), user_id: str = "", user_level: str = "beginner"):
@@ -291,7 +265,6 @@ async def upload_document(file: UploadFile = File(...), user_id: str = "", user_
     doc_type = detect_document_type(text)
     simplified = simplify_document(text, user_level)
     clauses, risk_score = extract_clauses(text)
-    highlighted_pdf = highlight_pdf(pdf_bytes, clauses)
     
     document = Document(
         user_id=user_id,
@@ -299,9 +272,7 @@ async def upload_document(file: UploadFile = File(...), user_id: str = "", user_
         doc_type=doc_type,
         simplified_text=simplified,
         clauses=clauses,
-        risk_score=risk_score,
-        pdf_base64=base64.b64encode(pdf_bytes).decode('utf-8'),
-        highlighted_pdf_base64=base64.b64encode(highlighted_pdf).decode('utf-8')
+        risk_score=risk_score
     )
     
     doc_dict = document.model_dump()
@@ -312,7 +283,7 @@ async def upload_document(file: UploadFile = File(...), user_id: str = "", user_
 
 @api_router.get("/document/{doc_id}")
 async def get_document(doc_id: str):
-    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0, "pdf_base64": 0})
+    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Document not found")
     return doc
@@ -325,47 +296,62 @@ async def get_graph(doc_id: str):
     graph_data = generate_graph_data(doc.get('clauses', []))
     return graph_data
 
-@api_router.get("/pdf/highlighted/{doc_id}")
-async def download_highlighted_pdf(doc_id: str):
-    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0, "highlighted_pdf_base64": 1})
-    if not doc or not doc.get('highlighted_pdf_base64'):
-        raise HTTPException(404, "Highlighted PDF not found")
-    return {"pdf_base64": doc['highlighted_pdf_base64']}
-
 @api_router.post("/consultation/book")
 async def book_consultation(request: ConsultationRequest):
-    doc = await db.documents.find_one({"id": request.document_id}, {"_id": 0, "doc_type": 1})
+    doc = await db.documents.find_one({"id": request.document_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Document not found")
     
     doc_type = doc['doc_type']
-    lawyer = next((l for l in mock_lawyers if l['specialty'] == doc_type), mock_lawyers[0])
+    risk_score = doc.get('risk_score', 0)
+    clauses = doc.get('clauses', [])
     
-    lawyer_email_body = f"""New Consultation Request
+    # Get top 2 risky clauses
+    sorted_clauses = sorted(clauses, key=lambda x: x.get('score', 0), reverse=True)
+    top_risky = sorted_clauses[:2]
+    
+    lawyer = next((l for l in mock_lawyers if l['specialty'] == doc_type.lower()), mock_lawyers[0])
+    
+    risky_clauses_text = "\n".join([
+        f"{i+1}. {clause.get('type', 'Unknown').title()}: {clause.get('text', 'N/A')[:100]}... (Risk Score: {clause.get('score', 0)})"
+        for i, clause in enumerate(top_risky)
+    ])
+    
+    lawyer_email_body = f"""New Appointment Request
 
-Client Name: {request.user_name}
-Client Email: {request.user_email}
-Preferred Time: {request.preferred_time}
-Document Type: {doc_type}
-Document ID: {request.document_id}
+Client Information:
+- Name: {request.user_name}
+- Email: {request.user_email}
+- Preferred Time: {request.preferred_time}
+
+Document Details:
+- Type: {doc_type.upper()}
+- Overall Risk Score: {risk_score}/100
+- Document ID: {request.document_id}
+
+Top 2 Risky Clauses:
+{risky_clauses_text}
+
+{f'Client Message: {request.message}' if request.message else ''}
 
 Please contact the client to schedule the consultation."""
     
     user_email_body = f"""Dear {request.user_name},
 
-Your consultation request has been received.
+Your appointment request has been confirmed!
 
-Lawyer: {lawyer['name']}
-Specialty: {lawyer['specialty'].title()}
-Preferred Time: {request.preferred_time}
+Appointment Details:
+- Lawyer: {lawyer['name']} ({lawyer['title']})
+- Preferred Time: {request.preferred_time}
+- Document Type: {doc_type.title()}
 
-The lawyer will contact you shortly at {request.user_email}.
+{lawyer['name']} will contact you shortly at {request.user_email} to confirm the appointment.
 
 Best regards,
 Legal Sage Team"""
     
-    send_email(lawyer['email'], "New Consultation Request", lawyer_email_body)
-    send_email(request.user_email, "Consultation Confirmation", user_email_body)
+    send_email(lawyer['email'], "New Appointment Request", lawyer_email_body)
+    send_email(request.user_email, "Appointment Confirmation", user_email_body)
     
     return {"success": True, "lawyer": lawyer}
 

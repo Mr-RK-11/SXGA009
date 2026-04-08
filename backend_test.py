@@ -51,22 +51,23 @@ class LegalSageAPITester:
         return False
 
     def test_survey(self):
-        """Test survey submission"""
+        """Test survey submission with scoring (0-18 points)"""
         if not self.user_id:
             self.log_test("Survey", False, "No user_id available")
             return False
             
         try:
+            # Test with score 8 (intermediate level)
             response = requests.post(f"{self.api_url}/survey", 
-                json={"user_id": self.user_id, "user_level": "beginner"})
+                json={"user_id": self.user_id, "score": 8, "user_level": "intermediate"})
             
             if response.status_code == 200:
                 data = response.json()
-                if data.get('success'):
-                    self.log_test("Survey", True)
+                if data.get('success') and data.get('user_level') == 'intermediate':
+                    self.log_test("Survey", True, f"User level: {data.get('user_level')}")
                     return True
                 else:
-                    self.log_test("Survey", False, "Success field not true")
+                    self.log_test("Survey", False, "Success field not true or wrong user level")
             else:
                 self.log_test("Survey", False, f"Status code: {response.status_code}")
         except Exception as e:
@@ -182,33 +183,6 @@ This agreement is governed by the laws of the State of California."""
             self.log_test("Get Graph", False, str(e))
         return False
 
-    def test_download_pdf(self):
-        """Test highlighted PDF download"""
-        if not self.document_id:
-            self.log_test("Download PDF", False, "No document_id available")
-            return False
-            
-        try:
-            response = requests.get(f"{self.api_url}/pdf/highlighted/{self.document_id}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'pdf_base64' in data and data['pdf_base64']:
-                    # Try to decode base64 to verify it's valid
-                    try:
-                        base64.b64decode(data['pdf_base64'])
-                        self.log_test("Download PDF", True)
-                        return True
-                    except:
-                        self.log_test("Download PDF", False, "Invalid base64 PDF data")
-                else:
-                    self.log_test("Download PDF", False, "Missing pdf_base64 in response")
-            else:
-                self.log_test("Download PDF", False, f"Status code: {response.status_code}")
-        except Exception as e:
-            self.log_test("Download PDF", False, str(e))
-        return False
-
     def test_chat(self):
         """Test chatbot functionality"""
         if not self.document_id:
@@ -233,7 +207,7 @@ This agreement is governed by the laws of the State of California."""
         return False
 
     def test_consultation_booking(self):
-        """Test consultation booking (API only, emails may not send)"""
+        """Test consultation booking with top 2 risky clauses in email"""
         if not self.document_id:
             self.log_test("Consultation Booking", False, "No document_id available")
             return False
@@ -244,7 +218,8 @@ This agreement is governed by the laws of the State of California."""
                     "document_id": self.document_id,
                     "user_name": "Test User",
                     "user_email": "test@example.com",
-                    "preferred_time": "10 AM"
+                    "preferred_time": "10:00 AM",
+                    "message": "I have concerns about the liability clause"
                 })
             
             if response.status_code == 200:
@@ -272,7 +247,6 @@ This agreement is governed by the laws of the State of California."""
         self.test_upload()
         self.test_get_document()
         self.test_get_graph()
-        self.test_download_pdf()
         self.test_chat()
         self.test_consultation_booking()
         

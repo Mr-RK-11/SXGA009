@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { X, Calendar } from '@phosphor-icons/react';
+import { X, Calendar, CheckCircle } from '@phosphor-icons/react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const TIME_SLOTS = ['10 AM', '12 PM', '3 PM'];
+const TIME_SLOTS = ['10:00 AM', '12:00 PM', '3:00 PM'];
 
 export default function ConsultationModal({ documentId, onClose }) {
   const [formData, setFormData] = useState({
     user_name: '',
     user_email: '',
-    preferred_time: ''
+    preferred_time: '',
+    message: ''
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -38,32 +39,37 @@ export default function ConsultationModal({ documentId, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-6 z-50">
-      <div className="bg-white border-2 border-gray-900 rounded-md shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-8 max-w-2xl w-full">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-6 z-50 animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-black">
+          <h2 className="text-3xl font-bold text-gray-900">
             Book Lawyer Consultation
           </h2>
           <button
             data-testid="consultation-close-button"
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <X size={24} weight="bold" className="text-gray-900" />
+            <X size={24} weight="bold" className="text-gray-600" />
           </button>
         </div>
 
         {success ? (
-          <div className="text-center py-8">
-            <div className="bg-green-100 text-green-800 border-2 border-green-200 rounded-md p-6 mb-4">
-              <p className="text-lg font-semibold mb-2">Consultation Booked!</p>
-              <p className="text-base">You will receive a confirmation email shortly.</p>
+          <div className="text-center py-12 animate-fade-in">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+              <CheckCircle size={48} weight="fill" className="text-green-600" />
             </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">
+              Appointment Booked!
+            </h3>
+            <p className="text-lg text-gray-600">
+              You will receive a confirmation email shortly.
+            </p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="text-sm font-semibold tracking-[0.05em] uppercase text-gray-700 block mb-2">
+              <label className="text-sm font-semibold text-gray-700 block mb-2">
                 Your Name
               </label>
               <input
@@ -71,13 +77,14 @@ export default function ConsultationModal({ documentId, onClose }) {
                 data-testid="consultation-name-input"
                 value={formData.user_name}
                 onChange={(e) => setFormData({ ...formData, user_name: e.target.value })}
-                className="bg-white border-2 border-gray-300 text-gray-900 text-lg rounded-md focus:border-[#0052CC] focus:ring-2 focus:ring-[#0052CC] focus:outline-none p-3 w-full"
+                className="bg-gray-50 border-2 border-gray-200 text-gray-900 text-base rounded-xl focus:border-[#2563EB] focus:ring-2 focus:ring-blue-200 focus:outline-none p-4 w-full transition-all duration-200"
+                placeholder="John Doe"
                 required
               />
             </div>
 
             <div>
-              <label className="text-sm font-semibold tracking-[0.05em] uppercase text-gray-700 block mb-2">
+              <label className="text-sm font-semibold text-gray-700 block mb-2">
                 Email Address
               </label>
               <input
@@ -85,40 +92,55 @@ export default function ConsultationModal({ documentId, onClose }) {
                 data-testid="consultation-email-input"
                 value={formData.user_email}
                 onChange={(e) => setFormData({ ...formData, user_email: e.target.value })}
-                className="bg-white border-2 border-gray-300 text-gray-900 text-lg rounded-md focus:border-[#0052CC] focus:ring-2 focus:ring-[#0052CC] focus:outline-none p-3 w-full"
+                className="bg-gray-50 border-2 border-gray-200 text-gray-900 text-base rounded-xl focus:border-[#2563EB] focus:ring-2 focus:ring-blue-200 focus:outline-none p-4 w-full transition-all duration-200"
+                placeholder="john.doe@example.com"
                 required
               />
             </div>
 
             <div>
-              <label className="text-sm font-semibold tracking-[0.05em] uppercase text-gray-700 block mb-2">
-                Preferred Time
+              <label className="text-sm font-semibold text-gray-700 block mb-3">
+                Preferred Time Slot
               </label>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-3">
                 {TIME_SLOTS.map((slot) => (
                   <button
                     key={slot}
                     type="button"
-                    data-testid={`consultation-time-${slot.replace(' ', '-')}`}
+                    data-testid={`consultation-time-${slot.replace(/[: ]/g, '-')}`}
                     onClick={() => setFormData({ ...formData, preferred_time: slot })}
-                    className={`py-3 px-4 rounded-md border-2 font-semibold text-base transition-all ${
+                    className={`py-4 px-4 rounded-xl border-2 font-semibold text-sm transition-all duration-200 transform hover:scale-105 ${
                       formData.preferred_time === slot
-                        ? 'bg-[#0052CC] text-white border-[#0052CC]'
-                        : 'bg-white text-gray-900 border-gray-300 hover:border-gray-900 hover:bg-gray-50'
+                        ? 'bg-[#2563EB] text-white border-[#2563EB] shadow-lg'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-[#2563EB]'
                     }`}
                   >
-                    <Calendar size={20} weight="bold" className="inline mr-2" />
+                    <Calendar size={20} weight="bold" className="mx-auto mb-1" />
                     {slot}
                   </button>
                 ))}
               </div>
             </div>
 
+            <div>
+              <label className="text-sm font-semibold text-gray-700 block mb-2">
+                Additional Message (Optional)
+              </label>
+              <textarea
+                data-testid="consultation-message-input"
+                value={formData.message}
+                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                className="bg-gray-50 border-2 border-gray-200 text-gray-900 text-base rounded-xl focus:border-[#2563EB] focus:ring-2 focus:ring-blue-200 focus:outline-none p-4 w-full transition-all duration-200 resize-none"
+                placeholder="Any specific concerns or questions you'd like to discuss..."
+                rows={4}
+              />
+            </div>
+
             <button
               type="submit"
               data-testid="consultation-submit-button"
               disabled={loading || !formData.user_name || !formData.user_email || !formData.preferred_time}
-              className="bg-[#0052CC] text-white font-semibold text-lg px-6 py-3 rounded-md hover:bg-[#003D99] focus:ring-4 focus:ring-blue-300 focus:outline-none transition-all w-full disabled:opacity-50"
+              className="bg-[#2563EB] text-white font-semibold text-lg px-8 py-4 rounded-xl hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 focus:outline-none transition-all duration-200 w-full disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transform hover:scale-[1.02]"
             >
               {loading ? 'Booking...' : 'Book Consultation'}
             </button>
