@@ -12,6 +12,10 @@ body {
   background: #0B0F14;
 }
 
+#emergent-badge {
+  display: none !important;
+}
+
 code {
   font-family: "JetBrains Mono", monospace;
 }
