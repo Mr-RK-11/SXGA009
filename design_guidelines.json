@@ -1,0 +1,114 @@
+{
+  "theme": "Dark",
+  "archetype": "Archetype 5 (Jewel & Luxury) mixed with Archetype 4 (Swiss/High-Contrast)",
+  "vibe": "High-End Legal Tech, Optical Clarity, Authoritative AI",
+  "global_design_rules": {
+    "background_strategy": "Solid #0B0F14 obsidian base. MUST include 2-3 massive ambient glowing orbs behind the layout to make the glassmorphism work. Use absolute positioned divs with `blur-[120px]` or `blur-[150px]`, e.g., one deep blue/indigo in top right, one muted crimson in bottom left (opacity around 10-15%).",
+    "surface_strategy": "Optical Glass. Never use opaque gray cards. All panels and cards MUST use `bg-white/[0.02]` or `bg-white/[0.03]`, with `backdrop-blur-xl` or `2xl`, and a crisp `border border-white/10`. Add a subtle inner light via `box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05)` if possible.",
+    "alignment": "Strict Left-Alignment for all data and text. Optical alignment for icons within buttons.",
+    "spacing": "Generous. Use `p-6` or `p-8` inside major glass panels. Minimum `gap-6` between grid items."
+  },
+  "colors": {
+    "background": "#0B0F14",
+    "surface": "rgba(255, 255, 255, 0.03)",
+    "surface_hover": "rgba(255, 255, 255, 0.06)",
+    "border": "rgba(255, 255, 255, 0.1)",
+    "border_hover": "rgba(255, 255, 255, 0.2)",
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#94A3B8",
+      "tertiary": "#64748B"
+    },
+    "risk_semantics": {
+      "high": {
+        "text": "#F87171",
+        "bg": "rgba(239, 68, 68, 0.1)",
+        "border": "rgba(239, 68, 68, 0.2)",
+        "glow": "drop-shadow(0 0 8px rgba(239,68,68,0.4))"
+      },
+      "medium": {
+        "text": "#FBBF24",
+        "bg": "rgba(245, 158, 11, 0.1)",
+        "border": "rgba(245, 158, 11, 0.2)",
+        "glow": "drop-shadow(0 0 8px rgba(245,158,11,0.4))"
+      },
+      "low": {
+        "text": "#34D399",
+        "bg": "rgba(16, 185, 129, 0.1)",
+        "border": "rgba(16, 185, 129, 0.2)",
+        "glow": "drop-shadow(0 0 8px rgba(16,185,129,0.4))"
+      }
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "\"Outfit\", sans-serif",
+      "body": "\"IBM Plex Sans\", sans-serif",
+      "mono": "\"JetBrains Mono\", monospace"
+    },
+    "hierarchy": {
+      "h1": "text-4xl md:text-5xl font-light tracking-tighter text-white",
+      "h2": "text-2xl md:text-3xl font-medium tracking-tight text-white",
+      "h3": "text-xl font-medium tracking-tight text-white/90",
+      "body": "text-base font-normal leading-relaxed text-slate-300",
+      "mono_score": "text-5xl md:text-7xl font-light tracking-tighter",
+      "label": "text-xs font-semibold tracking-[0.15em] uppercase text-slate-400"
+    }
+  },
+  "layout_strategy": {
+    "type": "Control Room Grid",
+    "structure": "100vh layout. Left Sidebar (w-64 or w-72) for navigation/history. Main content area stretches the rest.",
+    "main_content": "A fixed-height Flex/Grid container. Top: Header (Title + Global Actions). Middle: Split pane. Left side (65% width) for PDF Viewer. Right side (35% width) divided vertically into Risk Score Panel (top 30%) and Clause Cards Scrollable List (bottom 70%)."
+  },
+  "components": {
+    "sidebar": {
+      "style": "Glassmorphic panel. `border-r border-white/10`. Contains Brand Logo, 'New Document' CTA, and recent upload history.",
+      "items": "Hover states must have `bg-white/5` and `text-white`. Selected state has a bright left border."
+    },
+    "pdf_uploader": {
+      "style": "Dashed border `border-2 border-dashed border-white/20`, `bg-white/[0.02]`. On drag-over, `border-white/50 bg-white/10` with a subtle pulse animation.",
+      "icon": "Use a subtle glowing document or upload icon. Centralized layout, generous `py-20` padding."
+    },
+    "pdf_viewer": {
+      "container": "Glassmorphism wrapper `bg-[#131820]/80 backdrop-blur-md rounded-xl border border-white/10`.",
+      "header": "Toolbar with Zoom In/Out, Pages, Download, and Document Name.",
+      "canvas_mock": "Since it's a mock, represent the PDF page as a solid slightly lighter dark rectangle `bg-[#1E2530]` with inset shadow. Overlaid highlighted text should use the `risk_semantics` background colors."
+    },
+    "risk_score_panel": {
+      "style": "Glass card `p-8`. Layout: Flex column, optical center.",
+      "typography": "Use `JetBrains Mono` for the large number. Apply text-glow based on the severity.",
+      "indicator": "Circular SVG progress ring mapping to the 0-100 score, colored by risk severity. The score sits inside the ring."
+    },
+    "clause_card": {
+      "style": "Glass card `p-5 rounded-lg border border-white/10 bg-white/[0.02] transition-all duration-300`. Hover: `-translate-y-1 bg-white/[0.04] border-white/20 shadow-lg`.",
+      "severity_badge": "Top left. Pill shape. Uses `risk_semantics` colors for text and ultra-sheer bg.",
+      "text": "Body font `IBM Plex Sans`. Clause snippet in quotes. Explanation text below in smaller, muted text.",
+      "indicator": "A 2px bright solid border on the LEFT edge (`border-l-2`) matching the severity color to ground the design."
+    },
+    "buttons": {
+      "primary": "`bg-white text-black font-medium px-4 py-2 rounded-md hover:bg-slate-200 transition-colors`",
+      "secondary_glass": "`bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors`"
+    }
+  },
+  "motion_and_interactions": {
+    "hover": "All interactive elements must respond on hover. Cards float up `-translate-y-1`. Buttons brighten.",
+    "entrance": "Staggered fade-in for Clause Cards using Framer Motion (e.g., delay 0.1s, 0.2s, etc.).",
+    "loaders": "Use an ASCII-art style loader or a glowing indeterminate progress bar for the 'AI Extraction' state to feel technical and advanced."
+  },
+  "icons": {
+    "library": "lucide-react",
+    "usage": "Use `strokeWidth={1.5}` for a thinner, more premium architectural feel."
+  },
+  "accessibility": {
+    "contrast": "Ensure all standard text passes minimum 4.5:1 against the dark glass backgrounds. Use `text-slate-300` or lighter.",
+    "focus": "All buttons/inputs must have `focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none`."
+  },
+  "instructions_to_main_agent": [
+    "1. Ensure you create the 3 background glowing ambient orbs (divs with heavy blur) behind the main layout to give life to the glassmorphism. This is non-negotiable.",
+    "2. Strict reliance on pure HTML/Tailwind for structural layout (Sidebar, Main Grid) to maintain creative control. You may use Shadcn for specific interactive primitives if needed (e.g., Progress, Dialog) but strip Vercel styling in favor of glassmorphism.",
+    "3. Add Google Fonts 'Outfit', 'IBM Plex Sans', and 'JetBrains Mono' to index.html or global CSS.",
+    "4. Highlighted PDF viewer should be a mocked visual component. Build a realistic-looking container that mimics a PDF with highlighted text spans.",
+    "5. Every interactive element MUST have a `data-testid` attribute (e.g., `data-testid=\"upload-pdf-zone\"`, `data-testid=\"clause-card-high\"`).",
+    "6. Risk color coding is strictly Red/Orange/Green. Do NOT use default blue for the main score unless it's a completely neutral document."
+  ]
+}
