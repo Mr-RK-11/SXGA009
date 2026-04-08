@@ -162,15 +162,21 @@ Provide a clear explanation in bullet points."""
     )
     return response.choices[0].message.content
 
-def extract_clauses(text: str) -> tuple:
-    prompt = f"""Analyze this legal document and extract 10-15 key clauses.
+def extract_clauses(text: str, user_level: str = "beginner") -> tuple:
+    prompt = f"""Analyze this legal document and extract 10-20 key clauses.
+
+FOCUS ONLY ON these critical areas:
+- Payment terms and obligations
+- Liability and indemnification
+- Termination conditions
+- Penalties and damages
 
 For each clause, provide:
 - text: the actual clause text (keep it concise, max 150 chars)
-- type: category (payment, liability, termination, penalty, warranty, confidentiality, dispute, duration, obligation, rights)
-- severity: low, medium, or high
-- score: risk score 0-100
-- explanation: brief explanation of the risk
+- type: MUST be one of: payment, liability, termination, penalty
+- severity: low, medium, or high (be conservative - only mark truly risky items as high)
+- score: risk score 0-100 (0-30: low, 31-60: medium, 61-100: high)
+- explanation: brief explanation of the risk in {"simple everyday language" if user_level == "beginner" else "moderate detail" if user_level == "intermediate" else "legal terminology"}
 
 Return ONLY a valid JSON array of objects. No markdown, no extra text.
 
@@ -188,14 +194,29 @@ Document:
     
     try:
         clauses = json.loads(content)
-        if len(clauses) > 20:
-            clauses = clauses[:20]
         
-        total_score = sum(c.get('score', 0) for c in clauses)
-        risk_score = min(100, int(total_score / len(clauses))) if clauses else 0
+        # Filter to only include priority types
+        priority_types = ['payment', 'liability', 'termination', 'penalty']
+        clauses = [c for c in clauses if c.get('type', '').lower() in priority_types]
+        
+        # Limit to 10-20 clauses
+        if len(clauses) > 20:
+            clauses = sorted(clauses, key=lambda x: x.get('score', 0), reverse=True)[:20]
+        elif len(clauses) < 10 and len(clauses) > 0:
+            # If less than 10, keep what we have
+            pass
+        
+        # Calculate average risk score and clamp 0-100
+        if clauses:
+            total_score = sum(c.get('score', 0) for c in clauses)
+            risk_score = int(total_score / len(clauses))
+            risk_score = max(0, min(100, risk_score))  # Clamp 0-100
+        else:
+            risk_score = 0
         
         return clauses, risk_score
-    except:
+    except Exception as e:
+        logging.error(f"Clause extraction error: {e}")
         return [], 0
 
 def generate_graph_data(clauses: List[Dict]) -> Dict:
@@ -204,7 +225,8 @@ def generate_graph_data(clauses: List[Dict]) -> Dict:
     
     clause_keywords = ['payment', 'liability', 'termination', 'penalty']
     
-    limited_clauses = clauses[:15]
+    # Limit to max 12 nodes for cleaner visualization
+    limited_clauses = clauses[:12]
     
     for i, clause in enumerate(limited_clauses):
         severity = clause.get('severity', 'low')
@@ -216,12 +238,15 @@ def generate_graph_data(clauses: List[Dict]) -> Dict:
             'color': color_map.get(severity, '#16A34A')
         })
     
+    # Create edges only for related clauses
     for i, clause_i in enumerate(limited_clauses):
         for j, clause_j in enumerate(limited_clauses):
             if i < j:
+                # Same type = strong relationship
                 if clause_i.get('type') == clause_j.get('type'):
                     edges.append({'source': i, 'target': j})
                 else:
+                    # Shared keywords = weak relationship
                     text_i = clause_i.get('text', '').lower()
                     text_j = clause_j.get('text', '').lower()
                     if any(kw in text_i and kw in text_j for kw in clause_keywords):
@@ -264,7 +289,7 @@ async def upload_document(file: UploadFile = File(...), user_id: str = "", user_
     
     doc_type = detect_document_type(text)
     simplified = simplify_document(text, user_level)
-    clauses, risk_score = extract_clauses(text)
+    clauses, risk_score = extract_clauses(text, user_level)
     
     document = Document(
         user_id=user_id,
@@ -361,24 +386,52 @@ async def chat(request: ChatRequest):
     if not doc:
         raise HTTPException(404, "Document not found")
     
+    # Get user info for personalization
+    user = await db.users.find_one({"id": doc.get('user_id')}, {"_id": 0, "user_level": 1})
+    user_level = user.get('user_level', 'beginner') if user else 'beginner'
+    
     history = await db.chat_messages.find(
         {"document_id": request.document_id},
         {"_id": 0}
     ).sort("created_at", 1).to_list(20)
     
-    messages = [{"role": "system", "content": f"""You are a helpful legal assistant. Answer questions about this {doc['doc_type']} document.
+    # Build detailed context from document
+    clauses_text = "\n".join([
+        f"- {c.get('type', 'unknown').upper()}: {c.get('text', '')} (Risk: {c.get('score', 0)}/100, Severity: {c.get('severity', 'low')})"
+        for c in doc['clauses'][:10]
+    ])
+    
+    level_instructions = {
+        "beginner": "Explain everything in very simple, everyday language. Avoid all legal jargon. Use short sentences.",
+        "intermediate": "You can use some legal terms but explain them clearly. Provide moderate detail.",
+        "advanced": "Use proper legal terminology and provide detailed analysis."
+    }
+    
+    system_prompt = f"""You are a helpful legal document assistant analyzing a {doc['doc_type'].upper()} document.
 
-Key clauses:
-{json.dumps(doc['clauses'][:5], indent=2)}
+DOCUMENT CONTEXT:
+Document Type: {doc['doc_type']}
+Overall Risk Score: {doc.get('risk_score', 0)}/100
+Total Clauses Analyzed: {len(doc.get('clauses', []))}
 
-Simplified explanation:
-{doc['simplified_text'][:500]}
+KEY CLAUSES IN THIS DOCUMENT:
+{clauses_text}
 
-Rules:
-- Explain simply
-- Do NOT give legal advice
-- Only provide guidance
-- Reference specific clauses when relevant"""}]
+DOCUMENT SUMMARY:
+{doc['simplified_text'][:600]}
+
+RESPONSE GUIDELINES:
+- {level_instructions.get(user_level, level_instructions['beginner'])}
+- Always reference specific clauses from the document when answering
+- Provide guidance based on the document content, NOT generic legal advice
+- If asked about something not in the document, clearly state that
+- Focus on helping the user understand THIS specific document
+- Do NOT provide legal advice or tell users what to do
+- Suggest consulting the lawyer button if risk score is high
+
+Your role: Help users understand what's IN their document, not provide legal counsel."""
+    
+    messages = [{"role": "system", "content": system_prompt}]
     
     for h in history[-10:]:
         messages.append({"role": h['role'], "content": h['content']})

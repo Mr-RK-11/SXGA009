@@ -3,16 +3,11 @@
   background-color: #F8FAFC;
 }
 
-/* Hide Emergent badge */
-a[href*="emergent"],
-div[style*="position: fixed"],
-button[style*="position: fixed"][style*="z-index"] {
+/* Hide Emergent badge - more specific selectors */
+a[href*="emergent.sh"] {
   display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
 }
 
-#root > div:last-child,
-body > div:last-child {
+button[style*="position: fixed"][style*="bottom"][style*="right"] {
   display: none !important;
 }
