@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 
-const RiskScorePanel = ({ score }) => {
+const RiskScorePanel = ({ score, interpretation }) => {
   const getSeverity = (score) => {
     if (score >= 70) return 'high';
     if (score >= 40) return 'medium';
@@ -32,7 +32,7 @@ const RiskScorePanel = ({ score }) => {
   };
 
   const color = colors[severity];
-  const percentage = (score / 100) * 283; // Circumference of circle (2 * PI * r, r=45)
+  const percentage = (score / 100) * 283;
 
   return (
     <div
@@ -98,6 +98,15 @@ const RiskScorePanel = ({ score }) => {
             {severity} Risk
           </span>
         </div>
+
+        {/* Risk Interpretation */}
+        {interpretation && (
+          <div className="mt-4 p-3 rounded-lg" style={{ backgroundColor: color.bg, border: `1px solid ${color.border}` }}>
+            <p className="text-sm font-medium" style={{ color: color.text, fontFamily: '"IBM Plex Sans", sans-serif' }}>
+              {interpretation}
+            </p>
+          </div>
+        )}
 
         {/* Description */}
         <p className="mt-6 text-sm text-slate-400 leading-relaxed" style={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException
+from fastapi import FastAPI, APIRouter, UploadFile, File, Form, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,7 +6,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Literal
+from typing import List, Literal, Dict, Any
 import uuid
 from datetime import datetime, timezone
 import fitz
@@ -46,6 +46,19 @@ class Clause(BaseModel):
     score: float = Field(ge=0, le=100)
     explanation: str
 
+class GraphNode(BaseModel):
+    id: str
+    label: str
+    color: str
+
+class GraphEdge(BaseModel):
+    source: str
+    target: str
+
+class GraphData(BaseModel):
+    nodes: List[GraphNode]
+    edges: List[GraphEdge]
+
 class AnalysisResult(BaseModel):
     model_config = ConfigDict(extra="ignore")
     
@@ -53,6 +66,7 @@ class AnalysisResult(BaseModel):
     risk_score: float = Field(ge=0, le=100)
     highlighted_file: str
     document_name: str
+    graph_data: GraphData
 
 def extract_text_from_pdf(pdf_path: str) -> str:
     """Extract text from PDF using PyMuPDF"""
@@ -63,32 +77,65 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     doc.close()
     return text
 
-def extract_clauses_with_llm(text: str) -> dict:
-    """Use Groq LLM to extract clauses from legal text"""
+def get_personalized_prompt(user_type: str) -> str:
+    """Generate personalized prompt based on user type"""
     
-    prompt = f"""You are a legal document analyzer. Extract important clauses from the following legal document text. 
+    focus_areas = {
+        'student': 'penalties, fees, financial obligations, payment deadlines, late charges',
+        'employee': 'work obligations, restrictions, non-compete clauses, termination conditions, confidentiality',
+        'freelancer': 'payment terms, liability limitations, project deadlines, intellectual property, indemnification',
+        'tenant': 'rent amounts, security deposits, termination notice periods, maintenance obligations, lease renewals'
+    }
+    
+    impact_guidance = {
+        'student': 'Explain financial impact and what penalties they might face',
+        'employee': 'Explain career implications and restrictions on future work',
+        'freelancer': 'Explain business impact and financial exposure',
+        'tenant': 'Explain housing security and financial commitments'
+    }
+    
+    focus = focus_areas.get(user_type, 'key terms and conditions')
+    impact = impact_guidance.get(user_type, 'practical implications')
+    
+    return f"""You are a legal document analyzer specializing in contracts for {user_type}s.
 
-For each clause, provide:
-- text: The exact clause text (keep it concise, 1-3 sentences)
-- type: Either "risk", "obligation", or "right"
-- severity: Either "low", "medium", or "high"
-- score: A risk score from 0-100 (higher = more risky)
-- explanation: Brief explanation of why this clause matters
+Extract 10-20 IMPORTANT clauses from the document. Focus on:
+- {focus}
 
-Extract as many relevant clauses as you find (typically 8-15). Focus on the most important legal terms.
+ONLY include clauses about:
+1. Payment terms and financial obligations
+2. Liability and risk allocation  
+3. Termination conditions and notice periods
+4. Penalties, fees, or damages
+5. Key obligations and restrictions
 
-Return ONLY a valid JSON object in this exact format:
+For each clause:
+- text: Extract the exact clause (1-3 sentences, concise)
+- type: "risk", "obligation", or "right"
+- severity: "low", "medium", or "high" based on impact
+- score: 0-100 (higher = more risky for the {user_type})
+- explanation: {impact}
+
+Return ONLY valid JSON:
 {{
   "clauses": [
     {{
-      "text": "clause text here",
+      "text": "exact clause text",
       "type": "risk",
       "severity": "high",
       "score": 85,
-      "explanation": "explanation here"
+      "explanation": "brief explanation"
     }}
   ]
 }}
+"""
+
+def extract_clauses_with_llm(text: str, user_type: str) -> dict:
+    """Use Groq LLM to extract clauses from legal text with personalization"""
+    
+    personalized_prompt = get_personalized_prompt(user_type)
+    
+    prompt = f"""{personalized_prompt}
 
 Document text:
 {text[:8000]}
@@ -99,7 +146,7 @@ Document text:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a legal document analyzer that returns structured JSON data."
+                    "content": "You are a legal document analyzer that returns structured JSON data. Return ONLY valid JSON, no markdown or extra text."
                 },
                 {
                     "role": "user",
@@ -114,19 +161,16 @@ Document text:
         response_text = chat_completion.choices[0].message.content
         
         # Try to extract JSON from the response
-        # Sometimes LLM wraps JSON in markdown code blocks
         json_match = re.search(r'\{[\s\S]*\}', response_text)
         if json_match:
             json_str = json_match.group(0)
             result = json.loads(json_str)
             return result
         else:
-            # Fallback: try to parse the entire response
             return json.loads(response_text)
             
     except Exception as e:
         logging.error(f"Error extracting clauses with LLM: {e}")
-        # Return a default structure if LLM fails
         return {
             "clauses": [
                 {
@@ -139,6 +183,72 @@ Document text:
             ]
         }
 
+def generate_graph(clauses: List[Clause]) -> GraphData:
+    """Generate graph data with nodes and edges based on clause relationships"""
+    
+    # Limit to max 15 nodes
+    limited_clauses = clauses[:15]
+    
+    # Define colors based on severity
+    severity_colors = {
+        'high': '#EF4444',
+        'medium': '#F59E0B',
+        'low': '#10B981'
+    }
+    
+    # Create nodes
+    nodes = []
+    for i, clause in enumerate(limited_clauses):
+        # Take first 5-6 words for label
+        words = clause.text.split()[:6]
+        label = ' '.join(words) + '...'
+        
+        nodes.append(GraphNode(
+            id=f"c{i}",
+            label=label,
+            color=severity_colors.get(clause.severity, '#6B7280')
+        ))
+    
+    # Create edges based on relationships
+    edges = []
+    edge_count = 0
+    max_edges = 25
+    
+    # Keywords that indicate related clauses
+    connection_keywords = [
+        'payment', 'pay', 'fee', 'cost', 'price',
+        'liability', 'liable', 'responsible', 'damages',
+        'termination', 'terminate', 'end', 'cancel',
+        'penalty', 'penalize', 'fine',
+        'insurance', 'indemnify', 'indemnification'
+    ]
+    
+    for i, clause1 in enumerate(limited_clauses):
+        if edge_count >= max_edges:
+            break
+            
+        for j, clause2 in enumerate(limited_clauses):
+            if i >= j or edge_count >= max_edges:
+                continue
+            
+            # Check if same type
+            if clause1.type == clause2.type:
+                edges.append(GraphEdge(source=f"c{i}", target=f"c{j}"))
+                edge_count += 1
+                continue
+            
+            # Check for shared keywords
+            text1_lower = clause1.text.lower()
+            text2_lower = clause2.text.lower()
+            
+            for keyword in connection_keywords:
+                if keyword in text1_lower and keyword in text2_lower:
+                    edges.append(GraphEdge(source=f"c{i}", target=f"c{j}"))
+                    edge_count += 1
+                    break
+    
+    return GraphData(nodes=nodes, edges=edges)
+
 def highlight_pdf(input_path: str, output_path: str, clauses: List[Clause]) -> str:
     """Highlight clauses in PDF based on severity"""
     
@@ -146,19 +256,17 @@ def highlight_pdf(input_path: str, output_path: str, clauses: List[Clause]) -> s
     
     # Define colors based on severity
     colors = {
-        "high": (1, 0.44, 0.44),      # Red
-        "medium": (0.98, 0.75, 0.14),  # Orange
-        "low": (0.2, 0.83, 0.6)        # Green
+        "high": (1, 0.44, 0.44),
+        "medium": (0.98, 0.75, 0.14),
+        "low": (0.2, 0.83, 0.6)
     }
     
     for clause in clauses:
-        # Take first 5-8 words of the clause to search
         words = clause.text.split()[:7]
         search_text = ' '.join(words)
         
         color = colors.get(clause.severity, (1, 1, 0))
         
-        # Search and highlight in all pages
         for page in doc:
             text_instances = page.search_for(search_text)
             for inst in text_instances:
@@ -176,7 +284,6 @@ def calculate_overall_risk_score(clauses: List[Clause]) -> float:
     if not clauses:
         return 0.0
     
-    # Weight by severity
     severity_weights = {"high": 1.5, "medium": 1.0, "low": 0.5}
     
     weighted_sum = sum(clause.score * severity_weights.get(clause.severity, 1.0) 
@@ -191,45 +298,42 @@ async def root():
     return {"message": "Legal Decision Intelligence System API"}
 
 @api_router.post("/analyze", response_model=AnalysisResult)
-async def analyze_document(file: UploadFile = File(...)):
-    """Analyze uploaded PDF legal document"""
+async def analyze_document(file: UploadFile = File(...), user_type: str = Form(...)):
+    """Analyze uploaded PDF legal document with personalization"""
     
     if not file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
     
-    # Save uploaded file
     file_id = str(uuid.uuid4())
     input_path = UPLOADS_DIR / f"{file_id}_input.pdf"
     output_path = UPLOADS_DIR / f"{file_id}_highlighted.pdf"
     
     try:
-        # Save uploaded file
         with open(input_path, "wb") as f:
             content = await file.read()
             f.write(content)
         
-        # Extract text from PDF
         text = extract_text_from_pdf(str(input_path))
         
         if not text.strip():
             raise HTTPException(status_code=400, detail="Could not extract text from PDF")
         
-        # Extract clauses using LLM
-        llm_result = extract_clauses_with_llm(text)
+        # Extract clauses with personalization
+        llm_result = extract_clauses_with_llm(text, user_type)
         
-        # Parse clauses
         clauses = [Clause(**clause_data) for clause_data in llm_result.get('clauses', [])]
         
-        # Calculate overall risk score
         risk_score = calculate_overall_risk_score(clauses)
         
-        # Highlight PDF
+        # Generate graph data
+        graph_data = generate_graph(clauses)
+        
         highlight_pdf(str(input_path), str(output_path), clauses)
         
-        # Store analysis in database
         analysis_doc = {
             "id": file_id,
             "document_name": file.filename,
+            "user_type": user_type,
             "risk_score": risk_score,
             "clauses_count": len(clauses),
             "timestamp": datetime.now(timezone.utc).isoformat()
@@ -240,12 +344,12 @@ async def analyze_document(file: UploadFile = File(...)):
             clauses=clauses,
             risk_score=risk_score,
             highlighted_file=f"/api/download/{file_id}",
-            document_name=file.filename
+            document_name=file.filename,
+            graph_data=graph_data
         )
         
     except Exception as e:
         logging.error(f"Error analyzing document: {e}")
-        # Clean up files
         if input_path.exists():
             input_path.unlink()
         if output_path.exists():
@@ -266,7 +370,6 @@ async def download_highlighted_pdf(file_id: str):
         filename=f"highlighted_{file_id}.pdf"
     )
 
-# Include the router in the main app
 app.include_router(api_router)
 
 app.add_middleware(
@@ -277,7 +380,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'

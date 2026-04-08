@@ -25,7 +25,8 @@ class LegalDocumentAPITester:
                 response = requests.get(url, headers=headers, timeout=30)
             elif method == 'POST':
                 if files:
-                    response = requests.post(url, files=files, timeout=60)
+                    # For multipart form data with files and additional data
+                    response = requests.post(url, files=files, data=data, timeout=60)
                 else:
                     headers['Content-Type'] = 'application/json'
                     response = requests.post(url, json=data, headers=headers, timeout=30)
@@ -80,8 +81,8 @@ class LegalDocumentAPITester:
             422  # Unprocessable Entity for missing file
         )
 
-    def test_analyze_endpoint_with_sample_pdf(self):
-        """Test analyze endpoint with a sample PDF"""
+    def test_analyze_endpoint_with_sample_pdf(self, user_type="student"):
+        """Test analyze endpoint with a sample PDF and user_type"""
         # Create a simple test PDF content (this is a minimal PDF structure)
         pdf_content = b"""%PDF-1.4
 1 0 obj
@@ -116,7 +117,75 @@ stream
 BT
 /F1 12 Tf
 72 720 Td
-(This is a test legal document with clauses.) Tj
+(This is a test legal document with payment terms, liability clauses, termination conditions, and penalty fees.) Tj
+ET
+endstream
+endobj
+
+xref
+0 5
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000206 00000 n 
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+299
+%%EOF"""
+
+        files = {'file': ('test_legal_doc.pdf', pdf_content, 'application/pdf')}
+        data = {'user_type': user_type}
+        
+        return self.run_test(
+            f"Analyze Endpoint - With PDF ({user_type})",
+            "POST",
+            "api/analyze",
+            200,
+            files=files,
+            data=data
+        )
+
+    def test_analyze_endpoint_missing_user_type(self):
+        """Test analyze endpoint without user_type parameter"""
+        pdf_content = b"""%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+>>
+endobj
+
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+72 720 Td
+(Test document) Tj
 ET
 endstream
 endobj
@@ -140,10 +209,10 @@ startxref
         files = {'file': ('test_legal_doc.pdf', pdf_content, 'application/pdf')}
         
         return self.run_test(
-            "Analyze Endpoint - With PDF",
+            "Analyze Endpoint - Missing user_type",
             "POST",
             "api/analyze",
-            200,
+            422,  # Should fail without user_type
             files=files
         )
 
@@ -172,23 +241,39 @@ def main():
     # Test 2: Analyze without file
     tester.test_analyze_endpoint_no_file()
     
-    # Test 3: Analyze with sample PDF
-    success, response = tester.test_analyze_endpoint_with_sample_pdf()
-    file_id = None
-    if success and isinstance(response, dict):
-        # Extract file ID from highlighted_file path
-        highlighted_file = response.get('highlighted_file', '')
-        if '/download/' in highlighted_file:
-            file_id = highlighted_file.split('/download/')[-1]
-            print(f"📄 Extracted file ID: {file_id}")
+    # Test 3: Analyze without user_type
+    tester.test_analyze_endpoint_missing_user_type()
     
-    # Test 4: Download with invalid ID
+    # Test 4: Analyze with sample PDF for different user types
+    user_types = ["student", "employee", "freelancer", "tenant"]
+    file_ids = []
+    
+    for user_type in user_types:
+        success, response = tester.test_analyze_endpoint_with_sample_pdf(user_type)
+        if success and isinstance(response, dict):
+            # Extract file ID from highlighted_file path
+            highlighted_file = response.get('highlighted_file', '')
+            if '/download/' in highlighted_file:
+                file_id = highlighted_file.split('/download/')[-1]
+                file_ids.append(file_id)
+                print(f"📄 Extracted file ID for {user_type}: {file_id}")
+                
+                # Verify response structure for new features
+                if 'graph_data' in response:
+                    graph_data = response['graph_data']
+                    nodes_count = len(graph_data.get('nodes', []))
+                    edges_count = len(graph_data.get('edges', []))
+                    print(f"📊 Graph data - Nodes: {nodes_count}, Edges: {edges_count}")
+                else:
+                    print("⚠️  Missing graph_data in response")
+    
+    # Test 5: Download with invalid ID
     tester.test_download_endpoint_invalid_id()
     
-    # Test 5: Download with valid ID (if we got one)
-    if file_id:
+    # Test 6: Download with valid IDs (if we got any)
+    for i, file_id in enumerate(file_ids[:2]):  # Test first 2 to avoid too many tests
         success, _ = tester.run_test(
-            "Download Endpoint - Valid ID",
+            f"Download Endpoint - Valid ID ({user_types[i]})",
             "GET",
             f"api/download/{file_id}",
             200
