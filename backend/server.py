@@ -29,6 +29,7 @@ groq_client = Groq(api_key=os.environ['GROQ_API_KEY'])
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+app.include_router(api_router)
 class User(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
