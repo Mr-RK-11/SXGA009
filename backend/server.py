@@ -13,11 +13,9 @@ import fitz
 from groq import Groq
 import json
 import re
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import io
 import base64
+from urllib.parse import quote
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -96,49 +94,27 @@ class Lawyer(BaseModel):
 
 mock_lawyers = [
     # Property Lawyers (lease)
-    {"id": "1", "name": "Rajesh Sharma", "title": "Property Lawyer", "specialty": "lease", "email": "property.lawyer1@gmail.com", "image_url": "https://images.unsplash.com/photo-1556157382-97eda2d62296?w=400"},
-    {"id": "2", "name": "Ananya Iyer", "title": "Property Lawyer", "specialty": "lease", "email": "property.lawyer2@gmail.com", "image_url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"},
+    {"id": "1", "name": "Rajesh Sharma", "title": "Property Lawyer", "specialty": "lease", "phone": "919876543210", "image_url": "https://images.unsplash.com/photo-1556157382-97eda2d62296?w=400"},
+    {"id": "2", "name": "Ananya Iyer", "title": "Property Lawyer", "specialty": "lease", "phone": "919876543211", "image_url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400"},
     
     # HR Lawyers (employment)
-    {"id": "3", "name": "Vikram Mehta", "title": "HR Lawyer", "specialty": "employment", "email": "hr.lawyer1@gmail.com", "image_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400"},
-    {"id": "4", "name": "Neha Kapoor", "title": "HR Lawyer", "specialty": "employment", "email": "hr.lawyer2@gmail.com", "image_url": "https://images.unsplash.com/photo-1594744803329-e58b31de8bf5?w=400"},
+    {"id": "3", "name": "Vikram Mehta", "title": "HR Lawyer", "specialty": "employment", "phone": "919876543212", "image_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400"},
+    {"id": "4", "name": "Neha Kapoor", "title": "HR Lawyer", "specialty": "employment", "phone": "919876543213", "image_url": "https://images.unsplash.com/photo-1594744803329-e58b31de8bf5?w=400"},
     
     # Corporate Lawyers (contract)
-    {"id": "5", "name": "Arjun Rao", "title": "Corporate Lawyer", "specialty": "contract", "email": "corporate.lawyer1@gmail.com", "image_url": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400"},
-    {"id": "6", "name": "Sneha Reddy", "title": "Corporate Lawyer", "specialty": "contract", "email": "corporate.lawyer2@gmail.com", "image_url": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400"},
+    {"id": "5", "name": "Arjun Rao", "title": "Corporate Lawyer", "specialty": "contract", "phone": "919876543214", "image_url": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400"},
+    {"id": "6", "name": "Sneha Reddy", "title": "Corporate Lawyer", "specialty": "contract", "phone": "919876543215", "image_url": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400"},
     
     # Business Lawyers (nda)
-    {"id": "7", "name": "Karan Verma", "title": "Business Lawyer", "specialty": "nda", "email": "business.lawyer1@gmail.com", "image_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400"},
-    {"id": "8", "name": "Pooja Nair", "title": "Business Lawyer", "specialty": "nda", "email": "business.lawyer2@gmail.com", "image_url": "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=400"},
+    {"id": "7", "name": "Karan Verma", "title": "Business Lawyer", "specialty": "nda", "phone": "919876543216", "image_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400"},
+    {"id": "8", "name": "Pooja Nair", "title": "Business Lawyer", "specialty": "nda", "phone": "919876543217", "image_url": "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=400"},
 ]
 
-def send_email(to_email: str, subject: str, body: str, retry=True):
-    """Send email with error handling and retry logic"""
-    max_attempts = 2 if retry else 1
-    
-    for attempt in range(max_attempts):
-        try:
-            msg = MIMEMultipart()
-            msg['From'] = os.environ['EMAIL_ADDRESS']
-            msg['To'] = to_email
-            msg['Subject'] = subject
-            msg.attach(MIMEText(body, 'plain'))
-            
-            with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
-                server.login(os.environ['EMAIL_ADDRESS'], os.environ['EMAIL_APP_PASSWORD'])
-                server.send_message(msg)
-            
-            logging.info(f"✓ Email sent successfully to {to_email} - Subject: {subject}")
-            return True
-            
-        except Exception as e:
-            logging.error(f"✗ Email send failed to {to_email} (Attempt {attempt + 1}/{max_attempts}): {e}")
-            if attempt < max_attempts - 1:
-                logging.info(f"  Retrying email to {to_email}...")
-                continue
-            return False
-    
-    return False
+def create_whatsapp_link(lawyer_phone: str, message: str) -> str:
+    """Create WhatsApp redirect link with pre-filled message"""
+    encoded_message = quote(message)
+    whatsapp_link = f"https://wa.me/{lawyer_phone}?text={encoded_message}"
+    return whatsapp_link
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -363,79 +339,37 @@ async def book_consultation(request: ConsultationRequest):
     # Pick first one or fallback to first lawyer
     lawyer = matching_lawyers[0] if matching_lawyers else mock_lawyers[0]
     
-    # EMAIL TO LAWYER
-    lawyer_email_subject = "Appointment Scheduled"
-    lawyer_email_body = f"""New consultation scheduled.
+    # Build WhatsApp message
+    whatsapp_message = f"""Hello, I would like to confirm a legal consultation.
 
-Client Name: {request.user_name}
-Client Email: {request.user_email}
-
+Name: {request.user_name}
+Email: {request.user_email}
 Document Type: {doc_type.upper()}
 Risk Score: {risk_score}
 
 Date: {request.preferred_date}
-Time: {request.preferred_time}
-
-{f'Additional Notes: {request.message}' if request.message else ''}"""
+Time: {request.preferred_time}"""
     
-    # EMAIL TO USER
-    user_email_subject = "Appointment Confirmation"
-    user_email_body = f"""Hello {request.user_name},
-
-Your consultation has been confirmed.
-
-Lawyer: {lawyer['name']}
-Specialization: {lawyer['title']}
-
-Date: {request.preferred_date}
-Time: {request.preferred_time}
-
-Please be available on time.
-
-Best regards,
-Legal Sage Team"""
+    if request.message:
+        whatsapp_message += f"\n\nAdditional Notes: {request.message}"
     
-    # Send BOTH emails - log results but don't fail
+    # Create WhatsApp link
+    whatsapp_link = create_whatsapp_link(lawyer['phone'], whatsapp_message)
+    
     logging.info(f"=== Booking Appointment for {request.user_name} ===")
+    logging.info(f"✓ WhatsApp link generated for {lawyer['name']} ({lawyer['phone']})")
     
-    # Send to lawyer
-    lawyer_email_sent = False
-    try:
-        lawyer_email_sent = send_email(lawyer['email'], lawyer_email_subject, lawyer_email_body)
-        if lawyer_email_sent:
-            logging.info(f"✓ Lawyer email sent to {lawyer['name']} ({lawyer['email']})")
-        else:
-            logging.warning(f"⚠ Lawyer email failed to {lawyer['email']}")
-    except Exception as e:
-        logging.error(f"✗ Exception sending lawyer email: {e}")
-    
-    # Send to user
-    user_email_sent = False
-    try:
-        user_email_sent = send_email(request.user_email, user_email_subject, user_email_body)
-        if user_email_sent:
-            logging.info(f"✓ User email sent to {request.user_email}")
-        else:
-            logging.warning(f"⚠ User email failed to {request.user_email}")
-    except Exception as e:
-        logging.error(f"✗ Exception sending user email: {e}")
-    
-    # Log summary
-    logging.info(f"Email Summary - Lawyer: {'✓' if lawyer_email_sent else '✗'}, User: {'✓' if user_email_sent else '✗'}")
-    
-    # Always return success to frontend with appointment details
+    # Return WhatsApp link and appointment details
     return {
         "success": True,
         "lawyer": lawyer,
+        "whatsapp_link": whatsapp_link,
         "appointment": {
             "date": request.preferred_date,
             "time": request.preferred_time,
             "lawyer_name": lawyer['name'],
-            "lawyer_title": lawyer['title']
-        },
-        "emails_sent": {
-            "lawyer": lawyer_email_sent,
-            "user": user_email_sent
+            "lawyer_title": lawyer['title'],
+            "lawyer_phone": lawyer['phone']
         }
     }
 

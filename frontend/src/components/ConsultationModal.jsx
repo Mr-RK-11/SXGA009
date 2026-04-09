@@ -40,24 +40,19 @@ export default function ConsultationModal({ documentId, lawyer, onClose }) {
         time: formData.preferred_time
       });
       
+      // Open WhatsApp link in new tab
+      if (response.data.whatsapp_link) {
+        window.open(response.data.whatsapp_link, '_blank');
+      }
+      
       setSuccess(true);
       
       setTimeout(() => {
         onClose();
-      }, 4000);
+      }, 5000);
     } catch (error) {
       console.error('Booking error:', error);
-      // Still show success - don't break UX if backend fails
-      setAppointmentDetails({
-        lawyer_name: lawyer?.name || 'Unknown',
-        lawyer_title: lawyer?.title || 'Lawyer',
-        date: formData.preferred_date,
-        time: formData.preferred_time
-      });
-      setSuccess(true);
-      setTimeout(() => {
-        onClose();
-      }, 4000);
+      alert('Failed to generate WhatsApp link. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -101,8 +96,14 @@ export default function ConsultationModal({ documentId, lawyer, onClose }) {
               Appointment Confirmed
             </h3>
             
+            <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 mb-4">
+              <p className="text-base text-green-800 font-medium text-center">
+                📱 Redirecting to WhatsApp to confirm your appointment...
+              </p>
+            </div>
+            
             {appointmentDetails && (
-              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6 text-left max-w-md mx-auto">
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 text-left max-w-md mx-auto">
                 <div className="space-y-3">
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Lawyer</p>
@@ -131,10 +132,6 @@ export default function ConsultationModal({ documentId, lawyer, onClose }) {
                 </div>
               </div>
             )}
-            
-            <p className="text-base text-gray-600">
-              Confirmation emails have been sent to both you and the lawyer.
-            </p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
