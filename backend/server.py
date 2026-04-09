@@ -17,6 +17,9 @@ import io
 import base64
 from urllib.parse import quote
 
+port = int(os.environ.get("PORT", 5000))
+app.run(host="0.0.0.0", port=port)
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
