@@ -11,21 +11,24 @@ body > *:not(#root) {
   opacity: 0 !important;
 }
 
-
 @layer base {
   * {
-    @apply border-gray-200;
+    @apply border-purple-700;
   }
   
   body {
-    @apply bg-[#F8FAFC] text-gray-900;
+    background: linear-gradient(135deg, #6B21A8 0%, #1a0a2e 50%, #000000 100%);
+    background-attachment: fixed;
+    @apply text-white;
     font-family: 'Inter', sans-serif;
     font-size: 16px;
     line-height: 1.6;
+    min-height: 100vh;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Inter', sans-serif;
+    @apply text-white;
   }
 }
 

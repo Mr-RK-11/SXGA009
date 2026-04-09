@@ -1,6 +1,6 @@
 .App {
   min-height: 100vh;
-  background-color: #F8FAFC;
+  background: transparent;
 }
 
 /* Hide Emergent badge completely - aggressive CSS */
