@@ -10,7 +10,7 @@ const TIME_SLOTS = ['10:00 AM', '12:00 PM', '3:00 PM'];
 export default function ConsultationModal({ documentId, lawyer, onClose }) {
   const [formData, setFormData] = useState({
     user_name: '',
-    user_email: '',
+    user_phone: '',
     preferred_date: '',
     preferred_time: '',
     message: ''
@@ -152,17 +152,18 @@ export default function ConsultationModal({ documentId, lawyer, onClose }) {
 
             <div>
               <label className="text-sm font-semibold text-gray-700 block mb-2">
-                Email Address *
+                Phone Number (WhatsApp) *
               </label>
               <input
-                type="email"
-                data-testid="consultation-email-input"
-                value={formData.user_email}
-                onChange={(e) => setFormData({ ...formData, user_email: e.target.value })}
+                type="tel"
+                data-testid="consultation-phone-input"
+                value={formData.user_phone}
+                onChange={(e) => setFormData({ ...formData, user_phone: e.target.value })}
                 className="bg-gray-50 border-2 border-gray-200 text-gray-900 text-base rounded-xl focus:border-[#2563EB] focus:ring-2 focus:ring-blue-200 focus:outline-none p-4 w-full transition-all duration-200"
-                placeholder="john.doe@example.com"
+                placeholder="+91 98765 43210"
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">Include country code (e.g., +91 for India)</p>
             </div>
 
             <div>
@@ -204,27 +205,13 @@ export default function ConsultationModal({ documentId, lawyer, onClose }) {
               </div>
             </div>
 
-            <div>
-              <label className="text-sm font-semibold text-gray-700 block mb-2">
-                Additional Message (Optional)
-              </label>
-              <textarea
-                data-testid="consultation-message-input"
-                value={formData.message}
-                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                className="bg-gray-50 border-2 border-gray-200 text-gray-900 text-base rounded-xl focus:border-[#2563EB] focus:ring-2 focus:ring-blue-200 focus:outline-none p-4 w-full transition-all duration-200 resize-none"
-                placeholder="Any specific concerns or questions you'd like to discuss..."
-                rows={4}
-              />
-            </div>
-
             <button
               type="submit"
               data-testid="consultation-submit-button"
-              disabled={loading || !formData.user_name || !formData.user_email || !formData.preferred_date || !formData.preferred_time}
+              disabled={loading || !formData.user_name || !formData.user_phone || !formData.preferred_date || !formData.preferred_time}
               className="bg-[#2563EB] text-white font-semibold text-lg px-8 py-4 rounded-xl hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 focus:outline-none transition-all duration-200 w-full disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transform hover:scale-[1.02]"
             >
-              {loading ? 'Booking...' : 'Confirm Appointment'}
+              {loading ? 'Opening WhatsApp...' : 'Confirm Booking'}
             </button>
           </form>
         )}

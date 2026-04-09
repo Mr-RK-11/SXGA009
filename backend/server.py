@@ -80,7 +80,7 @@ class ChatRequest(BaseModel):
 class ConsultationRequest(BaseModel):
     document_id: str
     user_name: str
-    user_email: str
+    user_phone: str
     preferred_date: str
     preferred_time: str
     message: Optional[str] = ""
@@ -339,25 +339,25 @@ async def book_consultation(request: ConsultationRequest):
     # Pick first one or fallback to first lawyer
     lawyer = matching_lawyers[0] if matching_lawyers else mock_lawyers[0]
     
-    # Build WhatsApp message
-    whatsapp_message = f"""Hello, I would like to confirm a legal consultation.
+    # Build WhatsApp confirmation message for USER
+    whatsapp_message = f"""Hello {request.user_name},
 
-Name: {request.user_name}
-Email: {request.user_email}
+Your legal consultation has been successfully booked.
+
+Lawyer: {lawyer['name']}
 Document Type: {doc_type.upper()}
-Risk Score: {risk_score}
 
 Date: {request.preferred_date}
-Time: {request.preferred_time}"""
+Time: {request.preferred_time}
+
+Please be available at the scheduled time."""
     
-    if request.message:
-        whatsapp_message += f"\n\nAdditional Notes: {request.message}"
-    
-    # Create WhatsApp link
-    whatsapp_link = create_whatsapp_link(lawyer['phone'], whatsapp_message)
+    # Create WhatsApp link with USER's phone number
+    whatsapp_link = create_whatsapp_link(request.user_phone, whatsapp_message)
     
     logging.info(f"=== Booking Appointment for {request.user_name} ===")
-    logging.info(f"✓ WhatsApp link generated for {lawyer['name']} ({lawyer['phone']})")
+    logging.info(f"✓ WhatsApp confirmation link generated for user ({request.user_phone})")
+    logging.info(f"✓ Assigned lawyer: {lawyer['name']} ({lawyer['title']})")
     
     # Return WhatsApp link and appointment details
     return {
@@ -368,8 +368,7 @@ Time: {request.preferred_time}"""
             "date": request.preferred_date,
             "time": request.preferred_time,
             "lawyer_name": lawyer['name'],
-            "lawyer_title": lawyer['title'],
-            "lawyer_phone": lawyer['phone']
+            "lawyer_title": lawyer['title']
         }
     }
 
